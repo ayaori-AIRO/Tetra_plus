@@ -1,0 +1,26 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/thiago/ros2_ws/install/tetra_msgs/include/**",
+        "/home/thiago/ros2_ws/install/serial/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/thiago/ros2_ws/src/serial-ros2/include/**",
+        "/home/thiago/ros2_ws/src/tetra_hyu/tetra/include/**",
+        "/home/thiago/ros2_ws/src/tetra_hyu/tetra_interface/include/**",
+        "/home/thiago/ros2_ws/src/tetra_hyu/tetra_joystick/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

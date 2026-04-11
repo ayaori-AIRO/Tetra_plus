@@ -1,0 +1,16 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/thiago/ros2_ws/build/tetra_teleop",
+        "/home/thiago/ros2_ws/install/tetra_teleop/lib/python3.10/site-packages",
+        "/home/thiago/ros2_ws/install/tetra_msgs/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/thiago/ros2_ws/build/tetra_teleop",
+        "/home/thiago/ros2_ws/install/tetra_teleop/lib/python3.10/site-packages",
+        "/home/thiago/ros2_ws/install/tetra_msgs/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}

@@ -1,0 +1,5 @@
+# 정확히 발견된 키를 문자 그대로 치환 (안전망)
+sk-proj-HzjjumZKV4RWdiMEe7J9T3BlbkFJawT5hhkoxjNewibTWy0h==>REDACTED
+
+# 일반 패턴(여러 형태의 OpenAI 키 포함, 필요에 따라 확장)
+regex:sk-[A-Za-z0-9_-]{20,}==>REDACTED
