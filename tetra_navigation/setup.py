@@ -27,6 +27,7 @@ setup(
         'console_scripts': [
             'waypoint_sender = tetra_navigation.waypoint_sender:main',
             'waypoint_stop = tetra_navigation.waypoint_stop:main',
+            'apriltag_visualizer = tetra_navigation.apriltag_visualizer:main',
         ],
     },
 )
