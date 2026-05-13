@@ -93,7 +93,7 @@
         <mesh filename="package://tetra_description/meshes/Inspector.stl"
               scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="Black"/>
     </visual>
 
     <collision>
@@ -117,6 +117,31 @@
     <origin xyz="-0.69 0 -0.10" rpy="0 0 -1.57"/>
     <parent link="base_link"/>
     <child link="inspector_footprint_link"/>
+  </joint>
+
+  <!-- D405 -->
+  <link name="d405_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.023 0.042 0.042"/>
+      </geometry>
+      <material name="Blue"/>
+    </visual>
+  </link>
+
+  <joint name="d405_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="d405_link"/>
+    <origin xyz="-0.979 0 0.541" rpy="0 0 ${PI}"/>
+  </joint>
+
+  <link name="camera_color_optical_frame"/>
+
+  <joint name="camera_color_optical_joint" type="fixed">
+    <parent link="d405_link"/>
+    <child link="camera_color_optical_frame"/>
+    <origin xyz="0 0 0" rpy="${-PI/2} 0 ${-PI/2}"/>
   </joint>
 
   <!-- Rear Caster-->
@@ -211,7 +236,7 @@
     <origin xyz=" 0 0 0 " rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="file://$(find tetra_description)/meshes/Platform_Body_U.STL" scale="0.001 0.001 0.001" />
+          filename="package://tetra_description/meshes/Platform_Body_U.STL" scale="0.001 0.001 0.001" />
       </geometry>
       <material name="TransparentRed"/>        
     </visual>

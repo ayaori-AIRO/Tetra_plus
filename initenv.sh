@@ -1,11 +1,28 @@
-echo  'KERNEL=="ttyUSB*", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", MODE:="0777", GROUP:="dialout", SYMLINK+="tetra/motor"' >/etc/udev/rules.d/tetra_motor.rules
-echo  'KERNEL=="ttyUSB*", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", MODE:="0777", GROUP:="dialout", SYMLINK+="tetra/motor"' >/etc/udev/rules.d/tetra_motor.rules
-echo  'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE:="0777", ATTRS{serial}=="f14c918decbb5947858e587ae34fe2ec", GROUP:="dialout",  SYMLINK+="tetra/lidar"' >/etc/udev/rules.d/tetra_lidar.rules
+#!/bin/bash
+set -e
 
-# echo  'KERNEL=="ttyUSB*", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", MODE:="0666", ATTRS{serial}=="0000:00:14.0", GROUP:="dialout",  SYMLINK+="tetra/servo"' >/etc/udev/rules.d/tetra_servo.rules
+RULE_FILE="/etc/udev/rules.d/tetra_motor.rules"
 
-service udev reload
-sleep 2
-service udev restart
+rm -f \
+  /etc/udev/rules.d/tetra_motor.rules \
+  /etc/udev/rules.d/tetra_motor0.rules \
+  /etc/udev/rules.d/tetra_motor1.rules \
+  /etc/udev/rules.d/tetra_power.rules
 
+{
+  echo '# TETRA motor USB serial rules.'
+  echo '# /dev/ttyUSB0: ID_PATH=pci-0000:00:14.0-usb-0:4.3:1.0'
+  echo 'SUBSYSTEM=="tty", ENV{ID_PATH}=="pci-0000:00:14.0-usb-0:4.3:1.0", MODE="0666", GROUP="dialout", SYMLINK+="tetra/motor", SYMLINK+="tetra/motor0"'
+  echo '# /dev/ttyUSB1: ID_PATH=pci-0000:00:14.0-usb-0:4.4.1:1.0'
+  echo 'SUBSYSTEM=="tty", ENV{ID_PATH}=="pci-0000:00:14.0-usb-0:4.4.1:1.0", MODE="0666", GROUP="dialout", SYMLINK+="tetra/motor1"'
+} >"${RULE_FILE}"
 
+udevadm control --reload-rules
+udevadm trigger --subsystem-match=tty
+sleep 1
+
+echo "Generated motor rules:"
+cat "${RULE_FILE}"
+echo
+echo "Current motor links:"
+ls -l /dev/tetra/motor /dev/tetra/motor0 /dev/tetra/motor1 2>/dev/null || true

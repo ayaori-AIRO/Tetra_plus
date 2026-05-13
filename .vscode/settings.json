@@ -1,0 +1,6 @@
+{
+  "urdf-visualizer.packages": {
+    "tetra_description": "${workspaceFolder}/tetra_description"
+  },
+  "cmake.sourceDirectory": "/home/ayaori/ros2_ws/src/tetra/tetra"
+}

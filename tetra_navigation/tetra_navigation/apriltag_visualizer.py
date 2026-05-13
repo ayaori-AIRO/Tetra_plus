@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+# ros2 launch realsense2_camera rs_launch.py
+
+# ros2 run apriltag_ros apriltag_node --ros-args \
+# -r image_rect:=/camera/camera/color/image_raw \
+# -r camera_info:=/camera/camera/color/camera_info \
+# --params-file $(ros2 pkg prefix apriltag_ros)/share/apriltag_ros/cfg/tags_36h11.yaml
+
+# ros2 run tetra_navigation apriltag_visualizer
+
 import rclpy
 from rclpy.node import Node
 

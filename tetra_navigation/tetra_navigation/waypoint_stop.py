@@ -2,6 +2,7 @@ import rclpy
 import time
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from geometry_msgs.msg import PoseStamped
+import subprocess
 
 def main():
     rclpy.init()
@@ -13,10 +14,10 @@ def main():
     # 1. 첫 번째 목표 지점 정의
     gp1 = PoseStamped()
     gp1.header.frame_id = 'map'
-    gp1.pose.position.x = 17.965
-    gp1.pose.position.y = 3.610
-    gp1.pose.orientation.z = 1.000
-    gp1.pose.orientation.w = -0.011
+    gp1.pose.position.x = 17.651343391534965
+    gp1.pose.position.y = 3.061480262290648
+    gp1.pose.orientation.z = 0.9999773599247862
+    gp1.pose.orientation.w = 0.006729014627305277
 
     print('Tetra가 미션을 시작합니다...')
 
@@ -30,17 +31,31 @@ def main():
 
     result = nav.getResult()
     if result == TaskResult.SUCCEEDED:
-        print('[도착] 1번 지점에 도착했습니다. 5초간 대기합니다...')
-        time.sleep(5.0)
+        print('[도착] 1번 지점에 도착했습니다.')
+        time.sleep(1.0)
 
-        # [2단계] 뒤로 슬쩍 물러나기 (backUp 활용)
-        print('\n[이동] 이제 직선 후진으로 0.968m 이동합니다...')
+        print('[서보] AprilTag visual servoing 시작...')
+        servo_process = subprocess.Popen([
+            'ros2', 'run', 'tetra_navigation', 'apriltag_servo',
+            '--ros-args',
+            '-p', 'tag_id:=9',
+            '-p', 'target_distance:=0.15',
+            '-p', 'stop_after_reached:=true'
+        ])
+        servo_result = servo_process.wait()
+
+        if servo_result != 0:
+            print(f'[실패] AprilTag visual servoing이 비정상 종료되었습니다. code={servo_result}')
+            rclpy.shutdown()
+            return
+
+        print('[서보] 완료. 추가 후진 15cm 시작...')
         
         # backup 함수 사용: 
         # backup_dist: 후진 거리 (미터 단위, 양수로 입력하면 뒤로 갑니다)
         # backup_speed: 후진 속도 (m/s)
         # time_allowance: 제한 시간
-        nav.backup(backup_dist=1.1, backup_speed=0.05, time_allowance=20)
+        nav.backup(backup_dist=0.13, backup_speed=0.03, time_allowance=10)
 
         while not nav.isTaskComplete():
             pass
