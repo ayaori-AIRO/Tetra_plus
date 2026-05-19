@@ -38,8 +38,19 @@ def main():
         servo_process = subprocess.Popen([
             'ros2', 'run', 'tetra_navigation', 'apriltag_servo',
             '--ros-args',
-            '-p', 'tag_id:=9',
-            '-p', 'target_distance:=0.15',
+            '-p', 'tag_id:=10',
+            '-p', 'tag_size:=0.10',
+            '-p', 'target_distance:=0.4',
+            '-p', 'mid_tag_id:=9',
+            '-p', 'mid_tag_size:=0.05',
+            '-p', 'mid_target_distance:=0.2',
+            '-p', 'near_tag_id:=1',
+            '-p', 'near_tag_size:=0.01',
+            '-p', 'switch_distance:=0.45',
+            '-p', 'near_switch_distance:=0.25',
+            '-p', 'near_target_distance:=0.03',
+            '-p', 'distance_tolerance:=0.001',
+            '-p', 'min_linear_speed:=0.003',
             '-p', 'stop_after_reached:=true'
         ])
         servo_result = servo_process.wait()
@@ -49,13 +60,13 @@ def main():
             rclpy.shutdown()
             return
 
-        print('[서보] 완료. 추가 후진 15cm 시작...')
+        # print('[서보] 완료. 추가 후진 15cm 시작...')
         
         # backup 함수 사용: 
         # backup_dist: 후진 거리 (미터 단위, 양수로 입력하면 뒤로 갑니다)
         # backup_speed: 후진 속도 (m/s)
         # time_allowance: 제한 시간
-        nav.backup(backup_dist=0.13, backup_speed=0.03, time_allowance=10)
+        # nav.backup(backup_dist=0.13, backup_speed=0.03, time_allowance=10)
 
         while not nav.isTaskComplete():
             pass

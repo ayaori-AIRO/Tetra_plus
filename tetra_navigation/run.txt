@@ -1,0 +1,19 @@
+ros2 launch tetra tetra_configuration.launch.py
+
+ros2 launch tetra_navigation view_sllidar_a2m12_launch.py
+
+ros2 launch tetra_navigation bringup_launch.py 
+
+ros2 launch tetra_navigation rviz_launch.py
+
+ros2 launch realsense2_camera rs_launch.py publish_tf:=false
+
+ros2 run apriltag_ros apriltag_node --ros-args \
+  -r image_rect:=/camera/camera/color/image_raw \
+  -r camera_info:=/camera/camera/color/camera_info \
+  --params-file $(ros2 pkg prefix tetra_navigation)/share/tetra_navigation/config/tags_36h11_tetra.yaml
+
+ros2 run tetra_navigation apriltag_visualizer
+
+ros2 run tetra_navigation apriltag_servo 
+

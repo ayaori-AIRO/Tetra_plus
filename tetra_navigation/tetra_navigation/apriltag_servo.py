@@ -2,14 +2,14 @@
 
 # ros2 launch tetra tetra_configuration.launch.py
 
+# ros2 launch realsense2_camera rs_launch.py publish_tf:=false
+
 # ros2 run apriltag_ros apriltag_node --ros-args \
 #   -r image_rect:=/camera/camera/color/image_raw \
 #   -r camera_info:=/camera/camera/color/camera_info \
-#   --params-file $(ros2 pkg prefix apriltag_ros)/share/apriltag_ros/cfg/tags_36h11.yaml
+#   --params-file $(ros2 pkg prefix tetra_navigation)/share/tetra_navigation/config/tags_36h11_tetra.yaml
 
-# ros2 launch realsense2_camera rs_launch.py publish_tf:=false
-
-# ros2 run tetra_navigation apriltag_servo --ros-args -p tag_id:=9 -p tag_size:=0.12
+# ros2 run tetra_navigation apriltag_servo --ros-args
 
 import math
 
@@ -86,13 +86,22 @@ class AprilTagServo(Node):
     def __init__(self):
         super().__init__('apriltag_servo')
 
-        self.declare_parameter('tag_id', 9)
-        self.declare_parameter('tag_size', 0.12)
-        self.declare_parameter('target_distance', 0.13)
-        self.declare_parameter('distance_tolerance', 0.02)
+        self.declare_parameter('tag_id', 10)
+        self.declare_parameter('tag_size', 0.10)
+        self.declare_parameter('target_distance', 0.4)
+        self.declare_parameter('mid_tag_id', 9)
+        self.declare_parameter('mid_tag_size', 0.05)
+        self.declare_parameter('mid_target_distance', 0.2)
+        self.declare_parameter('near_tag_id', 1)
+        self.declare_parameter('near_tag_size', 0.01)
+        self.declare_parameter('switch_distance', 0.45)
+        self.declare_parameter('near_switch_distance', 0.25)
+        self.declare_parameter('near_target_distance', 0.03)
+        self.declare_parameter('distance_tolerance', 0.001)
         self.declare_parameter('lateral_tolerance', 0.015)
         self.declare_parameter('linear_gain', 0.25)
         self.declare_parameter('angular_gain', 0.8)
+        self.declare_parameter('min_linear_speed', 0.003)
         self.declare_parameter('max_linear_speed', 0.05)
         self.declare_parameter('max_angular_speed', 0.20)
         self.declare_parameter('angular_sign', -1.0)
@@ -107,10 +116,19 @@ class AprilTagServo(Node):
         self.tag_id = int(self.get_parameter('tag_id').value)
         self.tag_size = float(self.get_parameter('tag_size').value)
         self.target_distance = float(self.get_parameter('target_distance').value)
+        self.mid_tag_id = int(self.get_parameter('mid_tag_id').value)
+        self.mid_tag_size = float(self.get_parameter('mid_tag_size').value)
+        self.mid_target_distance = float(self.get_parameter('mid_target_distance').value)
+        self.near_tag_id = int(self.get_parameter('near_tag_id').value)
+        self.near_tag_size = float(self.get_parameter('near_tag_size').value)
+        self.switch_distance = float(self.get_parameter('switch_distance').value)
+        self.near_switch_distance = float(self.get_parameter('near_switch_distance').value)
+        self.near_target_distance = float(self.get_parameter('near_target_distance').value)
         self.distance_tolerance = float(self.get_parameter('distance_tolerance').value)
         self.lateral_tolerance = float(self.get_parameter('lateral_tolerance').value)
         self.linear_gain = float(self.get_parameter('linear_gain').value)
         self.angular_gain = float(self.get_parameter('angular_gain').value)
+        self.min_linear_speed = float(self.get_parameter('min_linear_speed').value)
         self.max_linear_speed = float(self.get_parameter('max_linear_speed').value)
         self.max_angular_speed = float(self.get_parameter('max_angular_speed').value)
         self.angular_sign = float(self.get_parameter('angular_sign').value)
@@ -151,9 +169,17 @@ class AprilTagServo(Node):
 
         self.create_timer(0.1, self.timeout_callback)
 
-        self.get_logger().info(
-            f'AprilTag servo ready: tag_id={self.tag_id}, tag_size={self.tag_size:.3f} m'
-        )
+        if self.mid_tag_id >= 0 or self.near_tag_id >= 0:
+            self.get_logger().info(
+                'AprilTag servo ready: '
+                f'far_tag_id={self.tag_id}, far_tag_size={self.tag_size:.3f} m, '
+                f'mid_tag_id={self.mid_tag_id}, mid_tag_size={self.mid_tag_size:.3f} m, '
+                f'near_tag_id={self.near_tag_id}, near_tag_size={self.near_tag_size:.3f} m'
+            )
+        else:
+            self.get_logger().info(
+                f'AprilTag servo ready: tag_id={self.tag_id}, tag_size={self.tag_size:.3f} m'
+            )
 
     def camera_info_callback(self, msg):
         self.camera_matrix = np.array(msg.k, dtype=np.float64).reshape((3, 3))
@@ -164,13 +190,11 @@ class AprilTagServo(Node):
             self.get_logger().warn('Waiting for camera_info before solving AprilTag pose.', throttle_duration_sec=2.0)
             return
 
-        detection = self.select_detection(msg)
-        if detection is None:
+        selected = self.select_detection(msg, msg.header)
+        if selected is None:
             return
 
-        pose_camera = self.solve_tag_pose(detection, msg.header)
-        if pose_camera is None:
-            return
+        pose_camera, target_distance, active_tag_id = selected
 
         self.last_detection_time = self.get_clock().now()
         self.pose_camera_pub.publish(pose_camera)
@@ -179,20 +203,47 @@ class AprilTagServo(Node):
         if pose_base is not None:
             self.pose_base_pub.publish(pose_base)
 
-        self.publish_servo_command(pose_camera)
+        self.publish_servo_command(pose_camera, target_distance, active_tag_id)
 
-    def select_detection(self, msg):
-        for detection in msg.detections:
-            if int(detection.id) == self.tag_id:
-                return detection
+    def select_detection(self, msg, header):
+        far_detection = self.find_detection(msg, self.tag_id)
+        mid_detection = self.find_detection(msg, self.mid_tag_id) if self.mid_tag_id >= 0 else None
+        near_detection = self.find_detection(msg, self.near_tag_id) if self.near_tag_id >= 0 else None
+
+        far_pose = self.solve_tag_pose(far_detection, header, self.tag_size) if far_detection is not None else None
+        mid_pose = self.solve_tag_pose(mid_detection, header, self.mid_tag_size) if mid_detection is not None else None
+        near_pose = self.solve_tag_pose(near_detection, header, self.near_tag_size) if near_detection is not None else None
+
+        if near_pose is not None:
+            if mid_pose is None or mid_pose.pose.position.z <= self.near_switch_distance:
+                return near_pose, self.near_target_distance, self.near_tag_id
+
+        if mid_pose is not None:
+            if far_pose is None or far_pose.pose.position.z <= self.switch_distance:
+                return mid_pose, self.mid_target_distance, self.mid_tag_id
+
+        if far_pose is not None:
+            return far_pose, self.target_distance, self.tag_id
 
         if msg.detections:
             ids = ', '.join(str(d.id) for d in msg.detections)
-            self.get_logger().debug(f'Ignoring tag ids [{ids}], waiting for id {self.tag_id}.')
+            if self.mid_tag_id >= 0 or self.near_tag_id >= 0:
+                self.get_logger().debug(
+                    f'Ignoring tag ids [{ids}], waiting for ids {self.tag_id}, {self.mid_tag_id}, or {self.near_tag_id}.'
+                )
+            else:
+                self.get_logger().debug(f'Ignoring tag ids [{ids}], waiting for id {self.tag_id}.')
         return None
 
-    def solve_tag_pose(self, detection, header):
-        half = self.tag_size / 2.0
+    @staticmethod
+    def find_detection(msg, tag_id):
+        for detection in msg.detections:
+            if int(detection.id) == tag_id:
+                return detection
+        return None
+
+    def solve_tag_pose(self, detection, header, tag_size):
+        half = tag_size / 2.0
         object_points = np.array([
             [-half, half, 0.0],
             [half, half, 0.0],
@@ -260,9 +311,9 @@ class AprilTagServo(Node):
         pose_base.pose.orientation = pose_camera.pose.orientation
         return pose_base
 
-    def publish_servo_command(self, pose_camera):
+    def publish_servo_command(self, pose_camera, target_distance, active_tag_id):
         lateral_error = pose_camera.pose.position.x
-        distance_error = pose_camera.pose.position.z - self.target_distance
+        distance_error = pose_camera.pose.position.z - target_distance
 
         cmd = Twist()
 
@@ -272,11 +323,19 @@ class AprilTagServo(Node):
 
         if abs(distance_error) > self.distance_tolerance:
             linear = -self.linear_gain * distance_error
+            if abs(linear) < self.min_linear_speed:
+                linear = math.copysign(self.min_linear_speed, linear)
             cmd.linear.x = self.clamp(linear, -self.max_linear_speed, self.max_linear_speed)
 
         if cmd.linear.x == 0.0 and cmd.angular.z == 0.0:
             self.publish_stop_once()
-            self.get_logger().info('AprilTag servo target reached.', throttle_duration_sec=1.0)
+            self.get_logger().info(
+                f'AprilTag servo target reached with tag {active_tag_id}: '
+                f'distance={pose_camera.pose.position.z:.3f} m, '
+                f'target={target_distance:.3f} m, '
+                f'gap={distance_error:.3f} m',
+                throttle_duration_sec=1.0
+            )
             if self.stop_after_reached:
                 self.should_exit = True
             return
@@ -287,7 +346,10 @@ class AprilTagServo(Node):
             'tag camera pose: '
             f'x={pose_camera.pose.position.x:.3f}, '
             f'y={pose_camera.pose.position.y:.3f}, '
-            f'z={pose_camera.pose.position.z:.3f}, '
+            f'distance={pose_camera.pose.position.z:.3f} m, '
+            f'target={target_distance:.3f} m, '
+            f'gap={distance_error:.3f} m, '
+            f'tag={active_tag_id}, '
             f'cmd linear.x={cmd.linear.x:.3f}, angular.z={cmd.angular.z:.3f}',
             throttle_duration_sec=0.5
         )
