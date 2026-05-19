@@ -22,7 +22,13 @@ function App() {
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
   const [photoDrag, setPhotoDrag] = useState(null);
+  const [streamRetryKey, setStreamRetryKey] = useState(Date.now());
+  const [liveConnected, setLiveConnected] = useState({
+    camera1: false,
+    camera2: false,
+  });
   const photoModalRef = useRef(null);
+  const streamRetryTimerRef = useRef(null);
   const extinguisherNames = [
     "ID:1 (B1F 복도 A)",
     "ID:2 B1F 복도B",
@@ -91,6 +97,40 @@ function App() {
 
   const selectedPhotoRecord = filteredRecords.find((item) => item.id === selectedPhotoRecordId);
 
+  const retryLiveStream = (cameraName) => {
+    setLiveConnected((prev) => ({
+      ...prev,
+      [cameraName]: false,
+    }));
+
+    if (streamRetryTimerRef.current) {
+      return;
+    }
+
+    streamRetryTimerRef.current = setTimeout(() => {
+      streamRetryTimerRef.current = null;
+      setStreamRetryKey(Date.now());
+    }, 1000);
+  };
+
+  const markLiveStreamConnected = (cameraName) => {
+    setLiveConnected((prev) => ({
+      ...prev,
+      [cameraName]: true,
+    }));
+  };
+
+  const refreshLiveStreams = () => {
+    if (streamRetryTimerRef.current) {
+      return;
+    }
+
+    streamRetryTimerRef.current = setTimeout(() => {
+      streamRetryTimerRef.current = null;
+      setStreamRetryKey(Date.now());
+    }, 300);
+  };
+
   useEffect(() => {
     const loadData = async () => {
       const q = query(
@@ -109,6 +149,48 @@ function App() {
     };
 
     loadData();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (streamRetryTimerRef.current) {
+        clearTimeout(streamRetryTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const checkLiveHealth = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/health", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("live health check failed");
+        }
+
+        const health = await response.json();
+        setLiveConnected((prev) => ({
+          camera1: prev.camera1 && Boolean(health.camera1),
+          camera2: prev.camera2 && Boolean(health.camera2),
+        }));
+
+        if (!health.camera1 || !health.camera2) {
+          refreshLiveStreams();
+        }
+      } catch (error) {
+        setLiveConnected({
+          camera1: false,
+          camera2: false,
+        });
+        refreshLiveStreams();
+      }
+    };
+
+    checkLiveHealth();
+    const intervalId = setInterval(checkLiveHealth, 1000);
+    return () => clearInterval(intervalId);
   }, []);
 
   const renderTabContent = () => {
@@ -137,9 +219,13 @@ function App() {
             <div className="live-camera-card">
               <div className="live-camera-title">소화기 검사 카메라1</div>
               <div className="live-view">
+                {!liveConnected.camera1 && <div>Not Connected</div>}
                 <img
                   className="live-stream"
-                  src="http://localhost:8000/video/camera1"
+                  src={`http://localhost:8000/video/camera1?t=${streamRetryKey}`}
+                  onLoad={() => markLiveStreamConnected("camera1")}
+                  onError={() => retryLiveStream("camera1")}
+                  style={{ display: liveConnected.camera1 ? "block" : "none" }}
                   alt="소화기 검사 카메라1"
                 />
               </div>
@@ -147,9 +233,13 @@ function App() {
             <div className="live-camera-card">
               <div className="live-camera-title">소화기 검사 카메라2</div>
               <div className="live-view">
+                {!liveConnected.camera2 && <div>Not Connected</div>}
                 <img
                   className="live-stream"
-                  src="http://localhost:8000/video/camera2"
+                  src={`http://localhost:8000/video/camera2?t=${streamRetryKey}`}
+                  onLoad={() => markLiveStreamConnected("camera2")}
+                  onError={() => retryLiveStream("camera2")}
+                  style={{ display: liveConnected.camera2 ? "block" : "none" }}
                   alt="소화기 검사 카메라2"
                 />
               </div>

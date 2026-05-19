@@ -16,7 +16,9 @@ config_path = os.path.join(BASE_DIR, "config", "st3235_config.json")
 with open(config_path, "r") as f:
     cfg = json.load(f)
 
-SERIAL_PORT = cfg["SERIAL_PORT"]
+SERIAL_PORT = os.environ.get("TETRA_ST3235_PORT", cfg["SERIAL_PORT"])
+if not os.path.exists(SERIAL_PORT) and os.path.exists("/dev/ttyUSB2"):
+    SERIAL_PORT = "/dev/ttyUSB2"
 BAUDRATE = cfg["BAUDRATE"]
 SERVO_ID = cfg["SERVO_ID"]
 ADDR_TORQUE_ENABLE = cfg["ADDR_TORQUE_ENABLE"]

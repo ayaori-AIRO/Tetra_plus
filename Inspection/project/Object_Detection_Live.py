@@ -7,6 +7,7 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 from ultralytics import YOLO
 
@@ -21,6 +22,10 @@ STREAM_FPS = 12
 latest_frames = {
     "camera1": None,
     "camera2": None,
+}
+latest_frame_times = {
+    "camera1": 0,
+    "camera2": 0,
 }
 frame_lock = threading.Lock()
 stop_event = threading.Event()
@@ -46,6 +51,19 @@ def setup_camera(camera_index, width, height, fps):
     return cap
 
 
+def resolve_camera_source(camera_source):
+    if isinstance(camera_source, int):
+        return camera_source
+
+    if isinstance(camera_source, str) and camera_source.isdigit():
+        return int(camera_source)
+
+    if isinstance(camera_source, str) and os.path.exists(camera_source):
+        return camera_source
+
+    raise FileNotFoundError(f"카메라 장치를 찾을 수 없습니다: {camera_source}")
+
+
 def detection_loop():
     model_config, camera_config = load_config()
 
@@ -55,12 +73,15 @@ def detection_loop():
         "라벨": YOLO(model_config["label_model_path"]),
     }
 
-    camera_index_1 = camera_config["camera_index_1"]
-    camera_index_2 = camera_config["camera_index_2"]
+    camera_index_1 = resolve_camera_source(camera_config["camera_index_1"])
+    camera_index_2 = resolve_camera_source(camera_config["camera_index_2"])
     width = camera_config["width"]
     height = camera_config["height"]
     fps = camera_config["fps"]
     confidence = camera_config["confidence"]
+
+    print(f"Top Camera: {camera_index_1}")
+    print(f"Bottom Camera: {camera_index_2}")
 
     cap1 = setup_camera(camera_index_1, width, height, fps)
     cap2 = setup_camera(camera_index_2, width, height, fps)
@@ -123,6 +144,9 @@ def detection_loop():
             with frame_lock:
                 latest_frames["camera1"] = annotated_frames[0]
                 latest_frames["camera2"] = annotated_frames[1]
+                now = time.time()
+                latest_frame_times["camera1"] = now
+                latest_frame_times["camera2"] = now
 
     finally:
         cap1.release()
@@ -144,20 +168,44 @@ def get_jpeg_frame(camera_name):
     return buffer.tobytes()
 
 
+def get_stream_health():
+    now = time.time()
+
+    with frame_lock:
+        return {
+            camera_name: latest_frames[camera_name] is not None
+            and now - latest_frame_times[camera_name] < 2
+            for camera_name in latest_frames
+        }
+
+
 class LiveStreamHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/":
+        path = urlparse(self.path).path
+
+        if path == "/":
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
             self.wfile.write(b"YOLO live stream server\n")
             return
 
-        if self.path == "/video/camera1":
+        if path == "/health":
+            body = json.dumps(get_stream_health()).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == "/video/camera1":
             self.stream_camera("camera1")
             return
 
-        if self.path == "/video/camera2":
+        if path == "/video/camera2":
             self.stream_camera("camera2")
             return
 

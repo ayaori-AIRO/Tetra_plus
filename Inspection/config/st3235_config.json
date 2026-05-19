@@ -1,5 +1,5 @@
 {
-    "SERIAL_PORT": "/dev/ttyUSB0",
+    "SERIAL_PORT": "/dev/tetra/st3235_ballscrew",
     "BAUDRATE": 1000000,
     "SERVO_ID": 1,
 
