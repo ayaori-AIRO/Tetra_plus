@@ -1,0 +1,15 @@
+{
+    "SERIAL_PORT": "/dev/ttyUSB0",
+    "BAUDRATE": 1000000,
+    "SERVO_ID": 1,
+
+    "ADDR_TORQUE_ENABLE": 40,
+    "ADDR_GOAL_POSITION": 42,
+    "ADDR_PRESENT_POSITION": 56,
+    "ADDR_PRESENT_VOLTAGE": 62,
+    "ADDR_PRESENT_TEMPERATURE": 63,
+    "comment" : "0= 0° / 1024= 90° / 2048= 180° (중심) / 3072= 270° / 4095= 360°"  ,
+    "GOAL_POSITION" : -1024, 
+    "MOVE_SPEED": 1200,
+    "MOVE_ACC": 50
+}

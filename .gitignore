@@ -1,3 +1,7 @@
 build/
 install/
 log/
+
+Inspection/react/inspection-web/node_modules/
+Inspection/react/inspection-web/build/
+Inspection/react/project/*firebase-adminsdk*.json
