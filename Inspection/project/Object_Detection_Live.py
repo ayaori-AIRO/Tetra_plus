@@ -18,6 +18,8 @@ CAMERA_CONFIG_PATH = os.path.join(BASE_DIR, "config", "camera_config.json")
 HOST = "0.0.0.0"
 PORT = 8000
 STREAM_FPS = 12
+DETECTION_LOG_ENABLED = os.environ.get("TETRA_DETECTION_LOG", "summary").lower()
+DETECTION_LOG_INTERVAL = float(os.environ.get("TETRA_DETECTION_LOG_INTERVAL", "5.0"))
 
 latest_frames = {
     "camera1": None,
@@ -27,8 +29,13 @@ latest_frame_times = {
     "camera1": 0,
     "camera2": 0,
 }
+latest_viewer_times = {
+    "camera1": 0,
+    "camera2": 0,
+}
 frame_lock = threading.Lock()
 stop_event = threading.Event()
+last_detection_log_time = 0.0
 
 
 def load_config():
@@ -64,6 +71,45 @@ def resolve_camera_source(camera_source):
     raise FileNotFoundError(f"카메라 장치를 찾을 수 없습니다: {camera_source}")
 
 
+def log_detections(detections):
+    global last_detection_log_time
+
+    if DETECTION_LOG_ENABLED in ("0", "false", "off", "none"):
+        return
+
+    now = time.time()
+    if now - last_detection_log_time < DETECTION_LOG_INTERVAL:
+        return
+
+    last_detection_log_time = now
+
+    if DETECTION_LOG_ENABLED == "detail":
+        for detection in detections:
+            print(
+                f"Camera {detection['camera_number']} | "
+                f"{detection['model_name']} {detection['class_name']} 감지 | "
+                f"확률: {detection['confidence']:.2f} | "
+                f"좌표: ({detection['x1']},{detection['y1']})~"
+                f"({detection['x2']},{detection['y2']})"
+            )
+        return
+
+    summary = {}
+    for detection in detections:
+        key = (
+            detection["camera_number"],
+            detection["model_name"],
+            detection["class_name"],
+        )
+        summary[key] = summary.get(key, 0) + 1
+
+    parts = [
+        f"Camera {camera_number} {model_name}/{class_name}: {count}"
+        for (camera_number, model_name, class_name), count in sorted(summary.items())
+    ]
+    print("[감지 요약] " + ", ".join(parts))
+
+
 def detection_loop():
     model_config, camera_config = load_config()
 
@@ -96,6 +142,10 @@ def detection_loop():
     print("YOLO11 라이브 스트리밍 시작")
     print(f"Camera 1: http://localhost:{PORT}/video/camera1")
     print(f"Camera 2: http://localhost:{PORT}/video/camera2")
+    print(
+        "Detection log mode: "
+        f"{DETECTION_LOG_ENABLED}, interval={DETECTION_LOG_INTERVAL:.1f}s"
+    )
 
     try:
         while not stop_event.is_set():
@@ -112,6 +162,7 @@ def detection_loop():
 
             frames = [frame1, frame2]
             annotated_frames = []
+            frame_detections = []
 
             for camera_number, frame in enumerate(frames, start=1):
                 annotated = frame.copy()
@@ -132,14 +183,23 @@ def detection_loop():
 
                         if conf_score >= 0.85:
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            print(
-                                f"Camera {camera_number} | {name} {class_name} 감지 | "
-                                f"확률: {conf_score:.2f} | 좌표: ({x1},{y1})~({x2},{y2})"
-                            )
+                            frame_detections.append({
+                                "camera_number": camera_number,
+                                "model_name": name,
+                                "class_name": class_name,
+                                "confidence": conf_score,
+                                "x1": x1,
+                                "y1": y1,
+                                "x2": x2,
+                                "y2": y2,
+                            })
 
                     annotated = results[0].plot(img=annotated)
 
                 annotated_frames.append(annotated)
+
+            if frame_detections:
+                log_detections(frame_detections)
 
             with frame_lock:
                 latest_frames["camera1"] = annotated_frames[0]
@@ -172,11 +232,22 @@ def get_stream_health():
     now = time.time()
 
     with frame_lock:
-        return {
+        frame_health = {
             camera_name: latest_frames[camera_name] is not None
             and now - latest_frame_times[camera_name] < 2
             for camera_name in latest_frames
         }
+        viewer_health = {
+            f"viewer_{camera_name}": now - latest_viewer_times[camera_name] < 2
+            for camera_name in latest_frames
+        }
+
+    return {
+        **frame_health,
+        **viewer_health,
+        "all_cameras": all(frame_health.values()),
+        "all_viewers": all(viewer_health.values()),
+    }
 
 
 class LiveStreamHandler(BaseHTTPRequestHandler):
@@ -212,6 +283,9 @@ class LiveStreamHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def stream_camera(self, camera_name):
+        with frame_lock:
+            latest_viewer_times[camera_name] = time.time()
+
         self.send_response(200)
         self.send_header("Age", "0")
         self.send_header("Cache-Control", "no-cache, private")
@@ -228,6 +302,9 @@ class LiveStreamHandler(BaseHTTPRequestHandler):
                 if jpg is None:
                     time.sleep(0.1)
                     continue
+
+                with frame_lock:
+                    latest_viewer_times[camera_name] = time.time()
 
                 self.wfile.write(b"--frame\r\n")
                 self.wfile.write(b"Content-Type: image/jpeg\r\n")

@@ -1,6 +1,7 @@
 build/
 install/
 log/
+logs/
 
 Inspection/react/inspection-web/node_modules/
 Inspection/react/inspection-web/build/

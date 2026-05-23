@@ -25,6 +25,9 @@ def generate_launch_description():
     output="screen",
     parameters=[
       {"ekf_option":ekf_option}
+    ],
+    remappings=[
+      ("cmd_vel", "/cmd_vel_out"),
     ]
   )
   start_robot_description_cmd = IncludeLaunchDescription(

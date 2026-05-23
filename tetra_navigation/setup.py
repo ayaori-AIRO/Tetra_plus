@@ -12,6 +12,7 @@ setup(
 	    ('share/tetra_navigation', ['package.xml']),
 	    ('share/tetra_navigation/launch', [
             'launch/bringup_launch.py',
+            'launch/robot_bringup.launch.py',
             'launch/rviz_launch.py',
             'launch/view_sllidar_a2m12_launch.py',
             'launch/waypoint_follower_launch.py',
@@ -34,7 +35,10 @@ setup(
             'waypoint_sender = tetra_navigation.waypoint_sender:main',
             'waypoint_stop = tetra_navigation.waypoint_stop:main',
             'apriltag_visualizer = tetra_navigation.apriltag_visualizer:main',
+            'apriltag_stream_server = tetra_navigation.apriltag_stream_server:main',
             'apriltag_servo = tetra_navigation.apriltag_servo:main',
+            'cmd_vel_mux = tetra_navigation.cmd_vel_mux:main',
+            'mission_manager = tetra_navigation.mission_manager:main',
         ],
     },
 )

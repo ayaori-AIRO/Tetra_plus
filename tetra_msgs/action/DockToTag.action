@@ -1,0 +1,24 @@
+int32 tag_id
+float32 tag_size
+float32 target_distance
+int32 mid_tag_id
+float32 mid_tag_size
+float32 mid_target_distance
+int32 near_tag_id
+float32 near_tag_size
+float32 near_target_distance
+float32 switch_distance
+float32 near_switch_distance
+float32 timeout_sec
+---
+bool success
+string reason
+float32 final_distance
+float32 final_lateral_error
+int32 final_tag_id
+---
+float32 current_distance
+float32 lateral_error
+float32 distance_error
+int32 active_tag_id
+string state

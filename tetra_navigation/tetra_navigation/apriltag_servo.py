@@ -12,15 +12,21 @@
 # ros2 run tetra_navigation apriltag_servo --ros-args
 
 import math
+import threading
+import time
 
 import cv2
 import numpy as np
 import rclpy
 from apriltag_msgs.msg import AprilTagDetectionArray
 from geometry_msgs.msg import PoseStamped, Twist
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.duration import Duration
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo
+from std_srvs.srv import SetBool
+from tetra_msgs.action import DockToTag
 from tf2_ros import Buffer, TransformException, TransformListener
 
 
@@ -112,6 +118,7 @@ class AprilTagServo(Node):
         self.declare_parameter('camera_info_topic', '/camera/camera/color/camera_info')
         self.declare_parameter('tag_timeout', 0.5)
         self.declare_parameter('stop_after_reached', False)
+        self.declare_parameter('enabled', True)
 
         self.tag_id = int(self.get_parameter('tag_id').value)
         self.tag_size = float(self.get_parameter('tag_size').value)
@@ -136,12 +143,23 @@ class AprilTagServo(Node):
         self.camera_frame = self.get_parameter('camera_frame').value
         self.tag_timeout = float(self.get_parameter('tag_timeout').value)
         self.stop_after_reached = bool(self.get_parameter('stop_after_reached').value)
+        self.enabled = bool(self.get_parameter('enabled').value)
 
         self.camera_matrix = None
         self.dist_coeffs = None
         self.last_detection_time = None
         self.last_cmd_was_stop = True
         self.should_exit = False
+        self.active_goal_handle = None
+        self.action_done_event = threading.Event()
+        self.action_lock = threading.Lock()
+        self.action_result = None
+        self.last_servo_feedback = {
+            'distance': 0.0,
+            'lateral_error': 0.0,
+            'distance_error': 0.0,
+            'active_tag_id': -1,
+        }
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -166,6 +184,15 @@ class AprilTagServo(Node):
             self.detection_callback,
             10
         )
+        self.create_service(SetBool, 'apriltag_servo/set_enabled', self.set_enabled_callback)
+        self.action_server = ActionServer(
+            self,
+            DockToTag,
+            'dock_to_tag',
+            execute_callback=self.execute_dock_to_tag,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback,
+        )
 
         self.create_timer(0.1, self.timeout_callback)
 
@@ -180,6 +207,119 @@ class AprilTagServo(Node):
             self.get_logger().info(
                 f'AprilTag servo ready: tag_id={self.tag_id}, tag_size={self.tag_size:.3f} m'
             )
+        self.get_logger().info(f'AprilTag servo enabled={self.enabled}')
+
+    def goal_callback(self, goal_request):
+        with self.action_lock:
+            if self.active_goal_handle is not None:
+                self.get_logger().warn('Rejecting dock_to_tag goal: another docking goal is active.')
+                return GoalResponse.REJECT
+
+        self.get_logger().info(
+            'Accepted dock_to_tag request: '
+            f'near_tag_id={goal_request.near_tag_id}, '
+            f'near_target_distance={goal_request.near_target_distance:.3f} m'
+        )
+        return GoalResponse.ACCEPT
+
+    def cancel_callback(self, goal_handle):
+        self.get_logger().info('dock_to_tag cancel requested.')
+        return CancelResponse.ACCEPT
+
+    def execute_dock_to_tag(self, goal_handle):
+        goal = goal_handle.request
+
+        with self.action_lock:
+            self.active_goal_handle = goal_handle
+            self.action_result = None
+            self.action_done_event.clear()
+            self.last_detection_time = None
+            self.last_servo_feedback = {
+                'distance': 0.0,
+                'lateral_error': 0.0,
+                'distance_error': 0.0,
+                'active_tag_id': -1,
+            }
+
+        self.apply_dock_goal(goal)
+        self.enabled = True
+
+        timeout_sec = goal.timeout_sec if goal.timeout_sec > 0.0 else 60.0
+        start_time = time.monotonic()
+        result = DockToTag.Result()
+
+        self.get_logger().info(f'dock_to_tag started. timeout={timeout_sec:.1f}s')
+
+        try:
+            while rclpy.ok():
+                if goal_handle.is_cancel_requested:
+                    self.publish_stop_once()
+                    self.enabled = False
+                    goal_handle.canceled()
+                    result.success = False
+                    result.reason = 'canceled'
+                    self.fill_result_feedback(result)
+                    return result
+
+                if self.action_done_event.is_set():
+                    goal_handle.succeed()
+                    self.fill_result_feedback(result)
+                    result.success = True
+                    result.reason = 'target_reached'
+                    return result
+
+                if time.monotonic() - start_time > timeout_sec:
+                    self.publish_stop_once()
+                    self.enabled = False
+                    goal_handle.abort()
+                    result.success = False
+                    result.reason = 'timeout'
+                    self.fill_result_feedback(result)
+                    return result
+
+                time.sleep(0.05)
+
+            goal_handle.abort()
+            result.success = False
+            result.reason = 'rclpy_shutdown'
+            self.fill_result_feedback(result)
+            return result
+
+        finally:
+            self.publish_stop_once()
+            self.enabled = False
+            with self.action_lock:
+                self.active_goal_handle = None
+                self.action_done_event.clear()
+
+    def apply_dock_goal(self, goal):
+        self.tag_id = int(goal.tag_id)
+        self.tag_size = float(goal.tag_size)
+        self.target_distance = float(goal.target_distance)
+        self.mid_tag_id = int(goal.mid_tag_id)
+        self.mid_tag_size = float(goal.mid_tag_size)
+        self.mid_target_distance = float(goal.mid_target_distance)
+        self.near_tag_id = int(goal.near_tag_id)
+        self.near_tag_size = float(goal.near_tag_size)
+        self.near_target_distance = float(goal.near_target_distance)
+        self.switch_distance = float(goal.switch_distance)
+        self.near_switch_distance = float(goal.near_switch_distance)
+
+    def fill_result_feedback(self, result):
+        result.final_distance = float(self.last_servo_feedback['distance'])
+        result.final_lateral_error = float(self.last_servo_feedback['lateral_error'])
+        result.final_tag_id = int(self.last_servo_feedback['active_tag_id'])
+
+    def set_enabled_callback(self, request, response):
+        self.enabled = bool(request.data)
+        if not self.enabled:
+            self.publish_stop_once()
+            self.last_detection_time = None
+
+        response.success = True
+        response.message = f'apriltag_servo enabled={self.enabled}'
+        self.get_logger().info(response.message)
+        return response
 
     def camera_info_callback(self, msg):
         self.camera_matrix = np.array(msg.k, dtype=np.float64).reshape((3, 3))
@@ -202,6 +342,9 @@ class AprilTagServo(Node):
         pose_base = self.transform_pose_to_base(pose_camera)
         if pose_base is not None:
             self.pose_base_pub.publish(pose_base)
+
+        if not self.enabled:
+            return
 
         self.publish_servo_command(pose_camera, target_distance, active_tag_id)
 
@@ -329,6 +472,13 @@ class AprilTagServo(Node):
 
         if cmd.linear.x == 0.0 and cmd.angular.z == 0.0:
             self.publish_stop_once()
+            self.publish_action_feedback(
+                pose_camera,
+                target_distance,
+                active_tag_id,
+                distance_error,
+                'target_reached'
+            )
             self.get_logger().info(
                 f'AprilTag servo target reached with tag {active_tag_id}: '
                 f'distance={pose_camera.pose.position.z:.3f} m, '
@@ -336,12 +486,21 @@ class AprilTagServo(Node):
                 f'gap={distance_error:.3f} m',
                 throttle_duration_sec=1.0
             )
+            if self.active_goal_handle is not None:
+                self.action_done_event.set()
             if self.stop_after_reached:
                 self.should_exit = True
             return
 
         self.cmd_pub.publish(cmd)
         self.last_cmd_was_stop = False
+        self.publish_action_feedback(
+            pose_camera,
+            target_distance,
+            active_tag_id,
+            distance_error,
+            'docking'
+        )
         self.get_logger().info(
             'tag camera pose: '
             f'x={pose_camera.pose.position.x:.3f}, '
@@ -353,6 +512,26 @@ class AprilTagServo(Node):
             f'cmd linear.x={cmd.linear.x:.3f}, angular.z={cmd.angular.z:.3f}',
             throttle_duration_sec=0.5
         )
+
+    def publish_action_feedback(self, pose_camera, target_distance, active_tag_id, distance_error, state):
+        self.last_servo_feedback = {
+            'distance': float(pose_camera.pose.position.z),
+            'lateral_error': float(pose_camera.pose.position.x),
+            'distance_error': float(distance_error),
+            'active_tag_id': int(active_tag_id),
+        }
+
+        goal_handle = self.active_goal_handle
+        if goal_handle is None:
+            return
+
+        feedback = DockToTag.Feedback()
+        feedback.current_distance = float(pose_camera.pose.position.z)
+        feedback.lateral_error = float(pose_camera.pose.position.x)
+        feedback.distance_error = float(distance_error)
+        feedback.active_tag_id = int(active_tag_id)
+        feedback.state = state
+        goal_handle.publish_feedback(feedback)
 
     def timeout_callback(self):
         if self.last_detection_time is None:
@@ -376,12 +555,15 @@ class AprilTagServo(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = AprilTagServo()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
         while rclpy.ok() and not node.should_exit:
-            rclpy.spin_once(node, timeout_sec=0.1)
+            executor.spin_once(timeout_sec=0.1)
     finally:
         if rclpy.ok():
             node.cmd_pub.publish(Twist())
+        executor.remove_node(node)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

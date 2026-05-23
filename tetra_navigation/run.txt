@@ -17,3 +17,6 @@ ros2 run tetra_navigation apriltag_visualizer
 
 ros2 run tetra_navigation apriltag_servo 
 
+---------------------------------------------------
+
+ros2 launch tetra_navigation robot_bringup.launch.py

@@ -3,8 +3,8 @@ import os
 
 
 PORT = os.environ.get("TETRA_ST3235_BALLSCREW_PORT", "/dev/tetra/st3235_ballscrew")
-if not os.path.exists(PORT) and os.path.exists("/dev/ttyUSB2"):
-    PORT = "/dev/ttyUSB2"
+if not os.path.exists(PORT) and os.path.exists("/dev/ttyUSB3"):
+    PORT = "/dev/ttyUSB3"
 BAUDRATE = 38400
 DEVICE_ID = 1
 

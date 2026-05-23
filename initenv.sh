@@ -2,8 +2,11 @@
 set -e
 
 RULE_FILE="/etc/udev/rules.d/tetra_motor.rules"
-ST3235_BALLSCREW_SOURCE="${TETRA_ST3235_BALLSCREW_SOURCE:-/dev/ttyUSB2}"
+ST3235_BALLSCREW_SOURCE="${TETRA_ST3235_BALLSCREW_SOURCE:-/dev/ttyUSB3}"
 ST3235_BALLSCREW_LINK="tetra/st3235_ballscrew"
+ST3235_BALLSCREW_ID_PATH="${TETRA_ST3235_BALLSCREW_ID_PATH:-pci-0000:00:14.0-usb-0:8.1:1.0}"
+NEOPIXEL_SOURCE="${TETRA_NEOPIXEL_SOURCE:-/dev/ttyACM0}"
+NEOPIXEL_LINK="tetra/neopixel"
 TOP_CAMERA_SERIAL="1B7AD4BF"
 BOTTOM_CAMERA_SERIAL="E06DE4BF"
 
@@ -50,7 +53,10 @@ rm -f \
   echo 'SUBSYSTEM=="tty", ENV{ID_PATH}=="pci-0000:00:14.0-usb-0:4.4.1:1.0", MODE="0666", GROUP="dialout", SYMLINK+="tetra/motor1"'
   echo '# /dev/tetra/lidar: ID_PATH=pci-0000:00:14.0-usb-0:4.1:1.0'
   echo 'SUBSYSTEM=="tty", ENV{ID_PATH}=="pci-0000:00:14.0-usb-0:4.1:1.0", MODE="0666", GROUP="dialout", SYMLINK+="tetra/lidar"'
-  make_tty_rule "${ST3235_BALLSCREW_SOURCE}" "${ST3235_BALLSCREW_LINK}" "/dev/${ST3235_BALLSCREW_LINK}: ST3235 and ball screw debug board"
+  echo "# /dev/${ST3235_BALLSCREW_LINK}: ST3235 and ball screw debug board"
+  echo "# ${ST3235_BALLSCREW_SOURCE}: ID_PATH=${ST3235_BALLSCREW_ID_PATH}"
+  echo "SUBSYSTEM==\"tty\", ENV{ID_PATH}==\"${ST3235_BALLSCREW_ID_PATH}\", MODE=\"0666\", GROUP=\"dialout\", SYMLINK+=\"${ST3235_BALLSCREW_LINK}\""
+  make_tty_rule "${NEOPIXEL_SOURCE}" "${NEOPIXEL_LINK}" "/dev/${NEOPIXEL_LINK}: Arduino Leonardo NeoPixel controller"
   make_video_rule "${TOP_CAMERA_SERIAL}" "tetra/top_camera" "/dev/tetra/top_camera: Top Camera"
   make_video_rule "${BOTTOM_CAMERA_SERIAL}" "tetra/bottom_camera" "/dev/tetra/bottom_camera: Bottom Camera"
 } >"${RULE_FILE}"
@@ -64,4 +70,4 @@ echo "Generated TETRA USB serial rules:"
 cat "${RULE_FILE}"
 echo
 echo "Current TETRA links:"
-ls -l /dev/tetra/motor /dev/tetra/motor0 /dev/tetra/motor1 /dev/tetra/lidar /dev/tetra/st3235_ballscrew /dev/tetra/top_camera /dev/tetra/bottom_camera 2>/dev/null || true
+ls -l /dev/tetra/motor /dev/tetra/motor0 /dev/tetra/motor1 /dev/tetra/lidar /dev/tetra/st3235_ballscrew /dev/tetra/neopixel /dev/tetra/top_camera /dev/tetra/bottom_camera 2>/dev/null || true

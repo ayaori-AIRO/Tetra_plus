@@ -4,6 +4,9 @@ import { db } from "./firebase";
 import "./App.css";
 
 function App() {
+  const streamHost = window.location.hostname || "localhost";
+  const inspectionStreamBaseUrl = `http://${streamHost}:8000`;
+  const apriltagStreamBaseUrl = `http://${streamHost}:8001`;
   const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState("home");
   const today = new Date();
@@ -24,6 +27,7 @@ function App() {
   const [photoDrag, setPhotoDrag] = useState(null);
   const [streamRetryKey, setStreamRetryKey] = useState(Date.now());
   const [liveConnected, setLiveConnected] = useState({
+    apriltag: false,
     camera1: false,
     camera2: false,
   });
@@ -162,7 +166,7 @@ function App() {
   useEffect(() => {
     const checkLiveHealth = async () => {
       try {
-        const response = await fetch("http://localhost:8000/health", {
+        const response = await fetch(`${inspectionStreamBaseUrl}/health`, {
           cache: "no-store",
         });
 
@@ -172,6 +176,7 @@ function App() {
 
         const health = await response.json();
         setLiveConnected((prev) => ({
+          ...prev,
           camera1: prev.camera1 && Boolean(health.camera1),
           camera2: prev.camera2 && Boolean(health.camera2),
         }));
@@ -180,10 +185,11 @@ function App() {
           refreshLiveStreams();
         }
       } catch (error) {
-        setLiveConnected({
+        setLiveConnected((prev) => ({
+          ...prev,
           camera1: false,
           camera2: false,
-        });
+        }));
         refreshLiveStreams();
       }
     };
@@ -191,7 +197,41 @@ function App() {
     checkLiveHealth();
     const intervalId = setInterval(checkLiveHealth, 1000);
     return () => clearInterval(intervalId);
-  }, []);
+  }, [inspectionStreamBaseUrl]);
+
+  useEffect(() => {
+    const checkAprilTagHealth = async () => {
+      try {
+        const response = await fetch(`${apriltagStreamBaseUrl}/health`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("apriltag stream health check failed");
+        }
+
+        const health = await response.json();
+        setLiveConnected((prev) => ({
+          ...prev,
+          apriltag: prev.apriltag && Boolean(health.apriltag),
+        }));
+
+        if (!health.apriltag) {
+          refreshLiveStreams();
+        }
+      } catch (error) {
+        setLiveConnected((prev) => ({
+          ...prev,
+          apriltag: false,
+        }));
+        refreshLiveStreams();
+      }
+    };
+
+    checkAprilTagHealth();
+    const intervalId = setInterval(checkAprilTagHealth, 1000);
+    return () => clearInterval(intervalId);
+  }, [apriltagStreamBaseUrl]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -213,7 +253,15 @@ function App() {
             <div className="live-camera-card">
               <div className="live-camera-title">소화기 자동정렬 카메라</div>
               <div className="live-view">
-                <div>Not Connected</div>
+                {!liveConnected.apriltag && <div>Not Connected</div>}
+                <img
+                  className="live-stream"
+                  src={`${apriltagStreamBaseUrl}/video/apriltag?t=${streamRetryKey}`}
+                  onLoad={() => markLiveStreamConnected("apriltag")}
+                  onError={() => retryLiveStream("apriltag")}
+                  style={{ display: liveConnected.apriltag ? "block" : "none" }}
+                  alt="소화기 자동정렬 카메라"
+                />
               </div>
             </div>
             <div className="live-camera-card">
@@ -222,7 +270,7 @@ function App() {
                 {!liveConnected.camera1 && <div>Not Connected</div>}
                 <img
                   className="live-stream"
-                  src={`http://localhost:8000/video/camera1?t=${streamRetryKey}`}
+                  src={`${inspectionStreamBaseUrl}/video/camera1?t=${streamRetryKey}`}
                   onLoad={() => markLiveStreamConnected("camera1")}
                   onError={() => retryLiveStream("camera1")}
                   style={{ display: liveConnected.camera1 ? "block" : "none" }}
@@ -236,7 +284,7 @@ function App() {
                 {!liveConnected.camera2 && <div>Not Connected</div>}
                 <img
                   className="live-stream"
-                  src={`http://localhost:8000/video/camera2?t=${streamRetryKey}`}
+                  src={`${inspectionStreamBaseUrl}/video/camera2?t=${streamRetryKey}`}
                   onLoad={() => markLiveStreamConnected("camera2")}
                   onError={() => retryLiveStream("camera2")}
                   style={{ display: liveConnected.camera2 ? "block" : "none" }}
