@@ -15,6 +15,8 @@ from ultralytics import YOLO
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_CONFIG_PATH = os.path.join(BASE_DIR, "config", "model_config.json")
 CAMERA_CONFIG_PATH = os.path.join(BASE_DIR, "config", "camera_config.json")
+CAPTURE_DIR = os.path.join(BASE_DIR, "capture")
+INSPECTION_CAPTURE_DIR = os.path.join(CAPTURE_DIR, "inspection")
 HOST = "0.0.0.0"
 PORT = 8000
 STREAM_FPS = 12
@@ -32,6 +34,20 @@ latest_frame_times = {
 latest_viewer_times = {
     "camera1": 0,
     "camera2": 0,
+}
+capture_dirs = {
+    "소화기": os.path.join(INSPECTION_CAPTURE_DIR, "fire_extinguisher"),
+    "라벨": os.path.join(INSPECTION_CAPTURE_DIR, "label"),
+    "압력게이지": os.path.join(INSPECTION_CAPTURE_DIR, "pressure_gauge"),
+}
+captured_targets = {
+    "소화기": False,
+    "라벨": False,
+    "압력게이지": False,
+}
+fire_extinguisher_pending_crops = {
+    1: None,
+    2: None,
 }
 frame_lock = threading.Lock()
 stop_event = threading.Event()
@@ -110,7 +126,144 @@ def log_detections(detections):
     print("[감지 요약] " + ", ".join(parts))
 
 
+def ensure_capture_dirs():
+    for capture_dir in capture_dirs.values():
+        os.makedirs(capture_dir, exist_ok=True)
+
+
+def clamp_box(frame, detection):
+    height, width = frame.shape[:2]
+    x1 = max(0, min(width - 1, int(detection["x1"])))
+    y1 = max(0, min(height - 1, int(detection["y1"])))
+    x2 = max(0, min(width, int(detection["x2"])))
+    y2 = max(0, min(height, int(detection["y2"])))
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    return x1, y1, x2, y2
+
+
+def capture_detection(frame, detection, target_name):
+    if captured_targets[target_name]:
+        return None
+
+    box = clamp_box(frame, detection)
+    if box is None:
+        return None
+
+    x1, y1, x2, y2 = box
+    crop = frame[y1:y2, x1:x2]
+    if crop.size == 0:
+        return None
+
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    confidence = int(detection["confidence"] * 100)
+    camera_number = detection["camera_number"]
+    filename = f"camera{camera_number}_{timestamp}_{confidence}.jpg"
+    save_path = os.path.join(capture_dirs[target_name], filename)
+
+    if cv2.imwrite(save_path, crop):
+        captured_targets[target_name] = True
+        print(f"[캡쳐 저장] {target_name}: {save_path}")
+        return save_path
+
+    print(f"[캡쳐 실패] {target_name}: {save_path}")
+    return None
+
+
+def crop_detection(frame, detection):
+    box = clamp_box(frame, detection)
+    if box is None:
+        return None
+
+    x1, y1, x2, y2 = box
+    crop = frame[y1:y2, x1:x2]
+    if crop.size == 0:
+        return None
+
+    return crop.copy()
+
+
+def resize_to_width(frame, width):
+    height = frame.shape[0]
+    current_width = frame.shape[1]
+    if current_width == width:
+        return frame
+
+    new_height = max(1, int(height * width / current_width))
+    return cv2.resize(frame, (width, new_height), interpolation=cv2.INTER_AREA)
+
+
+def save_merged_fire_extinguisher():
+    top_crop = fire_extinguisher_pending_crops[1]
+    bottom_crop = fire_extinguisher_pending_crops[2]
+    if top_crop is None or bottom_crop is None:
+        return None
+
+    target_width = max(top_crop.shape[1], bottom_crop.shape[1])
+    merged = cv2.vconcat([
+        resize_to_width(top_crop, target_width),
+        resize_to_width(bottom_crop, target_width),
+    ])
+
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"camera1_top_camera2_bottom_{timestamp}.jpg"
+    save_path = os.path.join(capture_dirs["소화기"], filename)
+
+    if cv2.imwrite(save_path, merged):
+        captured_targets["소화기"] = True
+        print(f"[캡쳐 저장] 소화기 병합: {save_path}")
+        return save_path
+
+    print(f"[캡쳐 실패] 소화기 병합: {save_path}")
+    return None
+
+
+def capture_fire_extinguisher(frame, detection):
+    if captured_targets["소화기"]:
+        return None
+
+    camera_number = detection["camera_number"]
+    if camera_number not in fire_extinguisher_pending_crops:
+        return None
+
+    if fire_extinguisher_pending_crops[camera_number] is None:
+        crop = crop_detection(frame, detection)
+        if crop is None:
+            return None
+
+        fire_extinguisher_pending_crops[camera_number] = crop
+        print(f"[캡쳐 대기] 소화기 camera{camera_number} crop 확보")
+
+    return save_merged_fire_extinguisher()
+
+
+def capture_label(frame, detection):
+    return capture_detection(frame, detection, "라벨")
+
+
+def capture_pressure_gauge(frame, detection):
+    return capture_detection(frame, detection, "압력게이지")
+
+
+def capture_detected_target(frame, detection):
+    model_name = detection["model_name"]
+
+    if model_name == "소화기":
+        return capture_fire_extinguisher(frame, detection)
+
+    if model_name == "라벨":
+        return capture_label(frame, detection)
+
+    if model_name == "압력게이지":
+        return capture_pressure_gauge(frame, detection)
+
+    return None
+
+
 def detection_loop():
+    ensure_capture_dirs()
     model_config, camera_config = load_config()
 
     models = {
@@ -181,7 +334,7 @@ def detection_loop():
                         cls_id = int(box.cls[0])
                         class_name = model.names[cls_id]
 
-                        if conf_score >= 0.85:
+                        if conf_score >= confidence:
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
                             frame_detections.append({
                                 "camera_number": camera_number,
@@ -193,6 +346,7 @@ def detection_loop():
                                 "x2": x2,
                                 "y2": y2,
                             })
+                            capture_detected_target(frame, frame_detections[-1])
 
                     annotated = results[0].plot(img=annotated)
 

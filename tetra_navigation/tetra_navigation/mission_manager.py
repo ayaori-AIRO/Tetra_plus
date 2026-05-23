@@ -40,7 +40,7 @@ class MissionManager(Node):
         self.declare_parameter('object_detection_health_url', 'http://127.0.0.1:8000/health')
         self.declare_parameter('object_detection_ready_timeout_sec', 15.0)
         self.declare_parameter('object_detection_viewer_timeout_sec', 30.0)
-        self.declare_parameter('inspection_duration_sec', 30.0)
+        self.declare_parameter('inspection_duration_sec', 60.0)
         self.autostart = bool(self.get_parameter('autostart').value)
         self.start_docking_after_nav_active = bool(
             self.get_parameter('start_docking_after_nav_active').value
