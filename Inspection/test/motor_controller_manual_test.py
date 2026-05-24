@@ -4,7 +4,6 @@ import json
 import os
 import sys
 import time
-kkikkkkt
 
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "st3235_config.json")
 

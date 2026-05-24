@@ -20,3 +20,9 @@ ros2 run tetra_navigation apriltag_servo
 ---------------------------------------------------
 
 ros2 launch tetra_navigation robot_bringup.launch.py
+
+python3 neopixel_controller.py off
+
+python3 Inspection/project/motor_controller.py up
+
+ros2 run tetra_teleop tetra_teleop_keyboard 

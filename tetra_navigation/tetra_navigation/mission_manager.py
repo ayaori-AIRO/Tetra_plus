@@ -40,6 +40,8 @@ class MissionManager(Node):
         self.declare_parameter('object_detection_health_url', 'http://127.0.0.1:8000/health')
         self.declare_parameter('object_detection_ready_timeout_sec', 15.0)
         self.declare_parameter('object_detection_viewer_timeout_sec', 30.0)
+        self.declare_parameter('object_detection_capture_timeout_sec', 20.0)
+        self.declare_parameter('inspection_side_count', 4)
         self.declare_parameter('inspection_duration_sec', 60.0)
         self.autostart = bool(self.get_parameter('autostart').value)
         self.start_docking_after_nav_active = bool(
@@ -66,6 +68,12 @@ class MissionManager(Node):
         )
         self.object_detection_viewer_timeout_sec = float(
             self.get_parameter('object_detection_viewer_timeout_sec').value
+        )
+        self.object_detection_capture_timeout_sec = float(
+            self.get_parameter('object_detection_capture_timeout_sec').value
+        )
+        self.inspection_side_count = int(
+            self.get_parameter('inspection_side_count').value
         )
         self.inspection_duration_sec = float(
             self.get_parameter('inspection_duration_sec').value
@@ -238,17 +246,22 @@ class MissionManager(Node):
             self.stop_object_detection()
             return
 
-        self.get_logger().info(
-            'Object detection is ready. Inspection placeholder is running.'
-        )
-        if self.inspection_duration_sec > 0.0:
-            time.sleep(self.inspection_duration_sec)
-            self.get_logger().info('Inspection placeholder finished.')
-            self.stop_object_detection()
-        else:
-            self.get_logger().info(
-                'inspection_duration_sec <= 0. Object detection will stay running.'
-            )
+        for side_index in range(self.inspection_side_count):
+            side_number = side_index + 1
+
+            if side_index > 0 and not self.rotate_st3235_90():
+                self.stop_object_detection()
+                return
+
+            if not self.reset_object_detection_capture(side_number):
+                self.stop_object_detection()
+                return
+
+            if not self.wait_for_fire_extinguisher_capture(side_number):
+                self.stop_object_detection()
+                return
+
+        self.stop_object_detection()
 
     def turn_on_internal_led(self):
         if not os.path.exists(self.neopixel_controller_script):
@@ -313,6 +326,136 @@ class MissionManager(Node):
             return False
 
         return True
+
+    def rotate_st3235_90(self):
+        if not os.path.exists(self.motor_controller_script):
+            self.get_logger().error(
+                f'Motor controller script not found: {self.motor_controller_script}'
+            )
+            return False
+
+        self.get_logger().info('Rotating ST3235 90 degrees after inspection capture.')
+        completed = subprocess.run(
+            ['python3', self.motor_controller_script, 'st90'],
+            capture_output=True,
+            text=True,
+            timeout=20.0,
+            check=False,
+        )
+
+        if completed.stdout:
+            for line in completed.stdout.splitlines():
+                self.get_logger().info(f'motor: {line}')
+
+        if completed.stderr:
+            for line in completed.stderr.splitlines():
+                self.get_logger().warn(f'motor stderr: {line}')
+
+        if completed.returncode != 0:
+            self.get_logger().error(
+                f'ST3235 90 degree command failed: returncode={completed.returncode}'
+            )
+            return False
+
+        return True
+
+    def object_detection_url(self, path):
+        base_url = self.object_detection_health_url
+        if base_url.endswith('/health'):
+            base_url = base_url[:-len('/health')]
+
+        return f'{base_url}{path}'
+
+    def read_object_detection_json(self, path, timeout=1.0):
+        with urllib.request.urlopen(
+            self.object_detection_url(path),
+            timeout=timeout,
+        ) as response:
+            return response.status, json.loads(response.read().decode('utf-8'))
+
+    def reset_object_detection_capture(self, side_number):
+        try:
+            status, _ = self.read_object_detection_json('/capture/reset')
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            self.get_logger().error(
+                f'Failed to reset capture state for side {side_number}: {exc}'
+            )
+            return False
+
+        if status != 200:
+            self.get_logger().error(
+                f'Capture reset failed for side {side_number}: status={status}'
+            )
+            return False
+
+        self.get_logger().info(f'Capture state reset for side {side_number}.')
+        return True
+
+    def wait_for_fire_extinguisher_capture(self, side_number):
+        deadline = time.time() + self.object_detection_capture_timeout_sec
+        self.get_logger().info(
+            f'Waiting for fire extinguisher capture: side {side_number}/'
+            f'{self.inspection_side_count}'
+        )
+
+        while time.time() < deadline:
+            if (
+                self.object_detection_process is not None
+                and self.object_detection_process.poll() is not None
+            ):
+                self.get_logger().error(
+                    'Object detection exited before fire extinguisher capture.'
+                )
+                return False
+
+            try:
+                status, capture = self.read_object_detection_json('/capture/status')
+                if status == 200 and capture.get('fire_extinguisher'):
+                    self.get_logger().info(
+                        f'Fire extinguisher capture completed: side {side_number}/'
+                        f'{self.inspection_side_count}'
+                    )
+                    return True
+            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                pass
+
+            time.sleep(0.5)
+
+        self.get_logger().error(
+            f'Timed out waiting for fire extinguisher capture: side {side_number}/'
+            f'{self.inspection_side_count}'
+        )
+        self.get_logger().warn(
+            f'Using fallback full-frame capture for side {side_number}/'
+            f'{self.inspection_side_count}.'
+        )
+        return self.save_fallback_fire_extinguisher_capture(side_number)
+
+    def save_fallback_fire_extinguisher_capture(self, side_number):
+        try:
+            status, capture = self.read_object_detection_json(
+                '/capture/fallback_fire_extinguisher',
+                timeout=3.0,
+            )
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            self.get_logger().error(
+                f'Fallback fire extinguisher capture failed for side '
+                f'{side_number}: {exc}'
+            )
+            return False
+
+        if status == 200 and capture.get('saved'):
+            self.get_logger().info(
+                f'Fallback fire extinguisher capture completed: side '
+                f'{side_number}/{self.inspection_side_count}'
+            )
+            return True
+
+        self.get_logger().error(
+            f'Fallback fire extinguisher capture failed for side '
+            f'{side_number}: status={status}, response={capture}'
+        )
+        return False
 
     def start_object_detection(self):
         if self.object_detection_process is not None:

@@ -27,6 +27,10 @@ latest_frames = {
     "camera1": None,
     "camera2": None,
 }
+latest_raw_frames = {
+    "camera1": None,
+    "camera2": None,
+}
 latest_frame_times = {
     "camera1": 0,
     "camera2": 0,
@@ -39,6 +43,7 @@ capture_dirs = {
     "소화기": os.path.join(INSPECTION_CAPTURE_DIR, "fire_extinguisher"),
     "라벨": os.path.join(INSPECTION_CAPTURE_DIR, "label"),
     "압력게이지": os.path.join(INSPECTION_CAPTURE_DIR, "pressure_gauge"),
+    "전체": os.path.join(INSPECTION_CAPTURE_DIR, "full"),
 }
 captured_targets = {
     "소화기": False,
@@ -50,6 +55,7 @@ fire_extinguisher_pending_crops = {
     2: None,
 }
 frame_lock = threading.Lock()
+capture_lock = threading.Lock()
 stop_event = threading.Event()
 last_detection_log_time = 0.0
 
@@ -131,6 +137,29 @@ def ensure_capture_dirs():
         os.makedirs(capture_dir, exist_ok=True)
 
 
+def reset_capture_state():
+    with capture_lock:
+        for target_name in captured_targets:
+            captured_targets[target_name] = False
+
+        for camera_number in fire_extinguisher_pending_crops:
+            fire_extinguisher_pending_crops[camera_number] = None
+
+
+def get_capture_status():
+    with capture_lock:
+        fire_extinguisher = captured_targets["소화기"]
+        label = captured_targets["라벨"]
+        pressure_gauge = captured_targets["압력게이지"]
+
+    return {
+        "fire_extinguisher": fire_extinguisher,
+        "label": label,
+        "pressure_gauge": pressure_gauge,
+        "all_targets": fire_extinguisher and label and pressure_gauge,
+    }
+
+
 def clamp_box(frame, detection):
     height, width = frame.shape[:2]
     x1 = max(0, min(width - 1, int(detection["x1"])))
@@ -145,28 +174,29 @@ def clamp_box(frame, detection):
 
 
 def capture_detection(frame, detection, target_name):
-    if captured_targets[target_name]:
-        return None
+    with capture_lock:
+        if captured_targets[target_name]:
+            return None
 
-    box = clamp_box(frame, detection)
-    if box is None:
-        return None
+        box = clamp_box(frame, detection)
+        if box is None:
+            return None
 
-    x1, y1, x2, y2 = box
-    crop = frame[y1:y2, x1:x2]
-    if crop.size == 0:
-        return None
+        x1, y1, x2, y2 = box
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
 
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    confidence = int(detection["confidence"] * 100)
-    camera_number = detection["camera_number"]
-    filename = f"camera{camera_number}_{timestamp}_{confidence}.jpg"
-    save_path = os.path.join(capture_dirs[target_name], filename)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        confidence = int(detection["confidence"] * 100)
+        camera_number = detection["camera_number"]
+        filename = f"camera{camera_number}_{timestamp}_{confidence}.jpg"
+        save_path = os.path.join(capture_dirs[target_name], filename)
 
-    if cv2.imwrite(save_path, crop):
-        captured_targets[target_name] = True
-        print(f"[캡쳐 저장] {target_name}: {save_path}")
-        return save_path
+        if cv2.imwrite(save_path, crop):
+            captured_targets[target_name] = True
+            print(f"[캡쳐 저장] {target_name}: {save_path}")
+            return save_path
 
     print(f"[캡쳐 실패] {target_name}: {save_path}")
     return None
@@ -220,23 +250,58 @@ def save_merged_fire_extinguisher():
     return None
 
 
-def capture_fire_extinguisher(frame, detection):
-    if captured_targets["소화기"]:
-        return None
+def save_fallback_fire_extinguisher():
+    with frame_lock:
+        top_frame = latest_raw_frames["camera1"]
+        bottom_frame = latest_raw_frames["camera2"]
+        if top_frame is None or bottom_frame is None:
+            top_frame = latest_frames["camera1"]
+            bottom_frame = latest_frames["camera2"]
 
-    camera_number = detection["camera_number"]
-    if camera_number not in fire_extinguisher_pending_crops:
-        return None
-
-    if fire_extinguisher_pending_crops[camera_number] is None:
-        crop = crop_detection(frame, detection)
-        if crop is None:
+        if top_frame is None or bottom_frame is None:
             return None
 
-        fire_extinguisher_pending_crops[camera_number] = crop
-        print(f"[캡쳐 대기] 소화기 camera{camera_number} crop 확보")
+        top_frame = top_frame.copy()
+        bottom_frame = bottom_frame.copy()
 
-    return save_merged_fire_extinguisher()
+    target_width = max(top_frame.shape[1], bottom_frame.shape[1])
+    merged = cv2.vconcat([
+        resize_to_width(top_frame, target_width),
+        resize_to_width(bottom_frame, target_width),
+    ])
+
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"fallback_camera1_top_camera2_bottom_{timestamp}.jpg"
+    save_path = os.path.join(capture_dirs["전체"], filename)
+
+    with capture_lock:
+        if cv2.imwrite(save_path, merged):
+            captured_targets["소화기"] = True
+            print(f"[일반 캡쳐 저장] 소화기 병합: {save_path}")
+            return save_path
+
+    print(f"[일반 캡쳐 실패] 소화기 병합: {save_path}")
+    return None
+
+
+def capture_fire_extinguisher(frame, detection):
+    with capture_lock:
+        if captured_targets["소화기"]:
+            return None
+
+        camera_number = detection["camera_number"]
+        if camera_number not in fire_extinguisher_pending_crops:
+            return None
+
+        if fire_extinguisher_pending_crops[camera_number] is None:
+            crop = crop_detection(frame, detection)
+            if crop is None:
+                return None
+
+            fire_extinguisher_pending_crops[camera_number] = crop
+            print(f"[캡쳐 대기] 소화기 camera{camera_number} crop 확보")
+
+        return save_merged_fire_extinguisher()
 
 
 def capture_label(frame, detection):
@@ -356,6 +421,8 @@ def detection_loop():
                 log_detections(frame_detections)
 
             with frame_lock:
+                latest_raw_frames["camera1"] = frame1.copy()
+                latest_raw_frames["camera2"] = frame2.copy()
                 latest_frames["camera1"] = annotated_frames[0]
                 latest_frames["camera2"] = annotated_frames[1]
                 now = time.time()
@@ -399,6 +466,7 @@ def get_stream_health():
     return {
         **frame_health,
         **viewer_health,
+        **get_capture_status(),
         "all_cameras": all(frame_health.values()),
         "all_viewers": all(viewer_health.values()),
     }
@@ -418,6 +486,45 @@ class LiveStreamHandler(BaseHTTPRequestHandler):
         if path == "/health":
             body = json.dumps(get_stream_health()).encode("utf-8")
             self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == "/capture/status":
+            body = json.dumps(get_capture_status()).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == "/capture/reset":
+            reset_capture_state()
+            body = json.dumps(get_capture_status()).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == "/capture/fallback_fire_extinguisher":
+            save_path = save_fallback_fire_extinguisher()
+            body = json.dumps({
+                **get_capture_status(),
+                "saved": save_path is not None,
+                "path": save_path,
+            }).encode("utf-8")
+            self.send_response(200 if save_path else 503)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Access-Control-Allow-Origin", "*")

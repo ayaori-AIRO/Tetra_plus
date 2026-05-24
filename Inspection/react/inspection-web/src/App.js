@@ -236,177 +236,89 @@ function App() {
   const renderTabContent = () => {
     switch (activeTab) {
       case "home":
-  return (
-    <div
-      className="tab-content"
-      style={{
-        display: "flex",
-        gap: "10px",
-        height: "100%",
-        alignItems: "stretch"
-      }}
-    >
-      <div className="home-live-area">
-        <div className="home-live-header">📡 Live</div>
-        <div className="home-live-content">
-          <div className="live-grid">
-            <div className="live-camera-card">
-              <div className="live-camera-title">소화기 자동정렬 카메라</div>
-              <div className="live-view">
-                {!liveConnected.apriltag && <div>Not Connected</div>}
-                <img
-                  className="live-stream"
-                  src={`${apriltagStreamBaseUrl}/video/apriltag?t=${streamRetryKey}`}
-                  onLoad={() => markLiveStreamConnected("apriltag")}
-                  onError={() => retryLiveStream("apriltag")}
-                  style={{ display: liveConnected.apriltag ? "block" : "none" }}
-                  alt="소화기 자동정렬 카메라"
-                />
+        return (
+          <div className="tab-content home-dashboard">
+            <div className="home-live-area">
+              <div className="section-title-row">
+                <h2>Live Monitoring</h2>
+                <span className="system-status">Standby</span>
+              </div>
+              <div className="home-live-content">
+                <div className="live-grid">
+                  <div className="live-camera-card">
+                    <div className="live-camera-title">자동정렬 카메라</div>
+                    <div className="live-view">
+                      {!liveConnected.apriltag && <div>Not Connected</div>}
+                      <img
+                        className="live-stream"
+                        src={`${apriltagStreamBaseUrl}/video/apriltag?t=${streamRetryKey}`}
+                        onLoad={() => markLiveStreamConnected("apriltag")}
+                        onError={() => retryLiveStream("apriltag")}
+                        style={{ display: liveConnected.apriltag ? "block" : "none" }}
+                        alt="소화기 자동정렬 카메라"
+                      />
+                    </div>
+                  </div>
+                  <div className="live-camera-card">
+                    <div className="live-camera-title">검사 카메라 1</div>
+                    <div className="live-view">
+                      {!liveConnected.camera1 && <div>Not Connected</div>}
+                      <img
+                        className="live-stream"
+                        src={`${inspectionStreamBaseUrl}/video/camera1?t=${streamRetryKey}`}
+                        onLoad={() => markLiveStreamConnected("camera1")}
+                        onError={() => retryLiveStream("camera1")}
+                        style={{ display: liveConnected.camera1 ? "block" : "none" }}
+                        alt="소화기 검사 카메라1"
+                      />
+                    </div>
+                  </div>
+                  <div className="live-camera-card">
+                    <div className="live-camera-title">검사 카메라 2</div>
+                    <div className="live-view">
+                      {!liveConnected.camera2 && <div>Not Connected</div>}
+                      <img
+                        className="live-stream"
+                        src={`${inspectionStreamBaseUrl}/video/camera2?t=${streamRetryKey}`}
+                        onLoad={() => markLiveStreamConnected("camera2")}
+                        onError={() => retryLiveStream("camera2")}
+                        style={{ display: liveConnected.camera2 ? "block" : "none" }}
+                        alt="소화기 검사 카메라2"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="inspection-log-panel">
+                  <div>[22:45:01] ID:1 이동 시작</div>
+                  <div>[22:45:08] 카메라 촬영 완료</div>
+                  <div>[22:45:10] 압력게이지 정상</div>
+                  <div>[22:45:12] OCR 완료</div>
+                  <div>[22:45:15] 부식 없음</div>
+                  <div>[22:45:16] 검사 종료</div>
+                </div>
               </div>
             </div>
-            <div className="live-camera-card">
-              <div className="live-camera-title">소화기 검사 카메라1</div>
-              <div className="live-view">
-                {!liveConnected.camera1 && <div>Not Connected</div>}
-                <img
-                  className="live-stream"
-                  src={`${inspectionStreamBaseUrl}/video/camera1?t=${streamRetryKey}`}
-                  onLoad={() => markLiveStreamConnected("camera1")}
-                  onError={() => retryLiveStream("camera1")}
-                  style={{ display: liveConnected.camera1 ? "block" : "none" }}
-                  alt="소화기 검사 카메라1"
-                />
-              </div>
-            </div>
-            <div className="live-camera-card">
-              <div className="live-camera-title">소화기 검사 카메라2</div>
-              <div className="live-view">
-                {!liveConnected.camera2 && <div>Not Connected</div>}
-                <img
-                  className="live-stream"
-                  src={`${inspectionStreamBaseUrl}/video/camera2?t=${streamRetryKey}`}
-                  onLoad={() => markLiveStreamConnected("camera2")}
-                  onError={() => retryLiveStream("camera2")}
-                  style={{ display: liveConnected.camera2 ? "block" : "none" }}
-                  alt="소화기 검사 카메라2"
-                />
-              </div>
-            </div>
-          </div>
-          <div className="inspection-log-panel">
-            <div>[22:45:01] ID:1 이동 시작</div>
-            <div>[22:45:08] 카메라 촬영 완료</div>
-            <div>[22:45:10] 압력게이지 정상</div>
-            <div>[22:45:12] OCR 완료</div>
-            <div>[22:45:15] 부식 없음</div>
-            <div>[22:45:16] 검사 종료</div>
-          </div>
-        </div>
-      </div>
 
-      {/* 🔴 오른쪽 전체 영역 */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          width: "140px",
-          height: "100%",
-          marginTop: "32px",
-          justifyContent: "space-between"
-        }}
-      >
-        {/* ───── 위: 개별 검사 박스 ───── */}
-        <div>
-          {/* 제목 */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              borderTop: "2px solid #444",
-              borderLeft: "2px solid #444",
-              borderRight: "2px solid #444",
-              padding: "4px 8px",
-              borderTopLeftRadius: "8px",
-              borderTopRightRadius: "8px",
-              fontWeight: 600
-            }}
-          >
-            개별 검사
-          </div>
-
-          {/* 버튼 영역 */}
-          <div
-            style={{
-              borderLeft: "2px solid #444",
-              borderRight: "2px solid #444",
-              borderBottom: "2px solid #444",
-              borderBottomLeftRadius: "8px",
-              borderBottomRightRadius: "8px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-              padding: "12px"
-            }}
-          >
-            <button>ID : 1</button>
-            <button>ID : 2</button>
-            <button>ID : 3</button>
-
-            {/* 구분선 */}
-            <div
-              style={{
-                height: "1px",
-                background: "#444",
-                margin: "6px 0"
-              }}
-            />
-
-            {/* ───── 아래: 검사 복귀 영역 ───── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div
-                style={{
-                  textAlign: "center",
-                  fontWeight: 600
-                }}
-              >
-                검사 · 복귀
+            <aside className="home-command-panel">
+              <div className="command-group">
+                <div className="command-group-title">개별 검사</div>
+                <div className="command-button-stack">
+                  <button type="button">ID : 1</button>
+                  <button type="button">ID : 2</button>
+                  <button type="button">ID : 3</button>
+                </div>
               </div>
 
-              {/* 🔵 추가 버튼 2개 */}
-              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <button
-                  style={{
-                    backgroundColor: "#007bff",
-                    color: "#fff",
-                    padding: "6px",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer"
-                  }}
-                >
-                  홈 위치
-                </button>
-
-                <button
-                  style={{
-                    backgroundColor: "#28a745",
-                    color: "#fff",
-                    padding: "6px",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer"
-                  }}
-                >
-                  검사 실행
-                </button>
+              <div className="command-group">
+                <div className="command-group-title">검사 · 복귀</div>
+                <div className="command-button-stack">
+                  <button className="secondary-action" type="button">홈 위치</button>
+                  <button className="primary-action" type="button">검사 실행</button>
+                </div>
               </div>
-            </div>
+            </aside>
           </div>
-        </div>
-      </div>
-    </div>
-  );
+        );
 
       case "id1":
         return (
@@ -466,26 +378,26 @@ function App() {
                 </div>
               </div>
               <div className="hardware-status-card">
+                <span>소화기 검사 카메라 Top</span>
+                <div className="connection-row">
+                  <span className="connection-dot"></span>
+                  <span>연결 안됨</span>
+                </div>
+              </div>
+              <div className="hardware-status-card">
+                <span>소화기 검사 카메라 Bottom</span>
+                <div className="connection-row">
+                  <span className="connection-dot"></span>
+                  <span>연결 안됨</span>
+                </div>
+              </div>
+              <div className="hardware-status-card">
                 <span>LED(소화기 내부)</span>
                 <input className="neopixel-slider" type="range" min="0" max="100" defaultValue="0" />
               </div>
               <div className="hardware-status-card">
                 <span>LED(소화기 외부)</span>
                 <input className="neopixel-slider" type="range" min="0" max="100" defaultValue="0" />
-              </div>
-              <div className="hardware-status-card">
-                <span>소화기 검사 카메라</span>
-                <div className="connection-row">
-                  <span className="connection-dot"></span>
-                  <span>연결 안됨</span>
-                </div>
-              </div>
-              <div className="hardware-status-card">
-                <span>자동정렬 카메라</span>
-                <div className="connection-row">
-                  <span className="connection-dot"></span>
-                  <span>연결 안됨</span>
-                </div>
               </div>
             </div>
           </div>
@@ -724,7 +636,7 @@ function App() {
 
   return (
     <div className="container">
-      <h1> 🧯 소화기 점검 시스템 🧯</h1>
+      <h1>TETRA 소화기 점검 시스템</h1>
 
       <div className="content-row">
         <div className="map-section">
@@ -746,7 +658,7 @@ function App() {
                 className={`tab-button ${activeTab === "calendar" ? "active" : ""}`}
                 onClick={() => setActiveTab("calendar")}
               >
-                월간 검사 현황
+                Inspection History
               </button>
 
               <button
