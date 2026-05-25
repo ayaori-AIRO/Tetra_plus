@@ -17,6 +17,6 @@
     pose_estimation_method: "pnp"
 
     tag:
-      ids: [1, 9, 10]
-      frames: [tag_1, tag_9, tag_10]
-      sizes: [0.01, 0.05, 0.10]
+      ids: [1, 2, 3, 9, 10]
+      frames: [tag_1, tag_2, tag_3, tag_9, tag_10]
+      sizes: [0.01, 0.01, 0.01, 0.05, 0.10]

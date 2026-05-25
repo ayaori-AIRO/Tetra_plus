@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from ultralytics import YOLO
 
@@ -24,6 +24,8 @@ DETECTION_LOG_ENABLED = os.environ.get("TETRA_DETECTION_LOG", "summary").lower()
 DETECTION_LOG_INTERVAL = float(os.environ.get("TETRA_DETECTION_LOG_INTERVAL", "5.0"))
 MIN_FRONT_LABEL_WIDTH = int(os.environ.get("TETRA_MIN_FRONT_LABEL_WIDTH", "220"))
 MIN_FRONT_LABEL_HEIGHT = int(os.environ.get("TETRA_MIN_FRONT_LABEL_HEIGHT", "160"))
+VALID_EXTINGUISHER_IDS = {1, 2, 3}
+current_extinguisher_id = int(os.environ.get("TETRA_EXTINGUISHER_ID", "1"))
 
 latest_frames = {
     "camera1": None,
@@ -42,10 +44,10 @@ latest_viewer_times = {
     "camera2": 0,
 }
 capture_dirs = {
-    "소화기": os.path.join(INSPECTION_CAPTURE_DIR, "fire_extinguisher"),
-    "라벨": os.path.join(INSPECTION_CAPTURE_DIR, "label"),
-    "압력게이지": os.path.join(INSPECTION_CAPTURE_DIR, "pressure_gauge"),
-    "전체": os.path.join(INSPECTION_CAPTURE_DIR, "full"),
+    "소화기": "fire_extinguisher",
+    "라벨": "label",
+    "압력게이지": "pressure_gauge",
+    "전체": "full",
 }
 captured_targets = {
     "소화기": False,
@@ -135,8 +137,33 @@ def log_detections(detections):
 
 
 def ensure_capture_dirs():
-    for capture_dir in capture_dirs.values():
-        os.makedirs(capture_dir, exist_ok=True)
+    for extinguisher_id in sorted(VALID_EXTINGUISHER_IDS):
+        for subdir in capture_dirs.values():
+            os.makedirs(
+                os.path.join(INSPECTION_CAPTURE_DIR, f"id{extinguisher_id}", subdir),
+                exist_ok=True,
+            )
+
+
+def get_capture_dir(target_name):
+    return os.path.join(
+        INSPECTION_CAPTURE_DIR,
+        f"id{current_extinguisher_id}",
+        capture_dirs[target_name],
+    )
+
+
+def set_extinguisher_id(extinguisher_id):
+    global current_extinguisher_id
+
+    if extinguisher_id not in VALID_EXTINGUISHER_IDS:
+        return False
+
+    with capture_lock:
+        current_extinguisher_id = extinguisher_id
+
+    ensure_capture_dirs()
+    return True
 
 
 def reset_capture_state():
@@ -159,6 +186,7 @@ def get_capture_status():
         "label": label,
         "pressure_gauge": pressure_gauge,
         "all_targets": fire_extinguisher and label and pressure_gauge,
+        "extinguisher_id": current_extinguisher_id,
     }
 
 
@@ -193,7 +221,7 @@ def capture_detection(frame, detection, target_name):
         confidence = int(detection["confidence"] * 100)
         camera_number = detection["camera_number"]
         filename = f"camera{camera_number}_{timestamp}_{confidence}.jpg"
-        save_path = os.path.join(capture_dirs[target_name], filename)
+        save_path = os.path.join(get_capture_dir(target_name), filename)
 
         if cv2.imwrite(save_path, crop):
             captured_targets[target_name] = True
@@ -241,7 +269,7 @@ def save_merged_fire_extinguisher():
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"camera1_top_camera2_bottom_{timestamp}.jpg"
-    save_path = os.path.join(capture_dirs["소화기"], filename)
+    save_path = os.path.join(get_capture_dir("소화기"), filename)
 
     if cv2.imwrite(save_path, merged):
         captured_targets["소화기"] = True
@@ -274,7 +302,7 @@ def save_fallback_fire_extinguisher():
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"fallback_camera1_top_camera2_bottom_{timestamp}.jpg"
-    save_path = os.path.join(capture_dirs["전체"], filename)
+    save_path = os.path.join(get_capture_dir("전체"), filename)
 
     with capture_lock:
         if cv2.imwrite(save_path, merged):
@@ -492,7 +520,9 @@ def get_stream_health():
 
 class LiveStreamHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        path = urlparse(self.path).path
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
+        query = parse_qs(parsed_url.query)
 
         if path == "/":
             self.send_response(200)
@@ -515,6 +545,25 @@ class LiveStreamHandler(BaseHTTPRequestHandler):
         if path == "/capture/status":
             body = json.dumps(get_capture_status()).encode("utf-8")
             self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == "/capture/set_extinguisher_id":
+            try:
+                requested_id = int(query.get("id", [0])[0])
+            except ValueError:
+                requested_id = 0
+            success = set_extinguisher_id(requested_id)
+            body = json.dumps({
+                **get_capture_status(),
+                "success": success,
+            }).encode("utf-8")
+            self.send_response(200 if success else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Access-Control-Allow-Origin", "*")

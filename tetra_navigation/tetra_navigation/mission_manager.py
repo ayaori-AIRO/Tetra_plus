@@ -88,6 +88,7 @@ class MissionManager(Node):
         self.start_timer = None
         self.mission_thread = None
         self.object_detection_process = None
+        self.current_extinguisher_id = 1
 
         if self.autostart:
             self.get_logger().info('Mission manager autostart is enabled.')
@@ -214,7 +215,11 @@ class MissionManager(Node):
                 'dock_to_tag succeeded: '
                 f'reason={result.reason}, '
                 f'final_distance={result.final_distance:.3f} m, '
-                f'final_lateral={result.final_lateral_error:.3f} m'
+                f'final_lateral={result.final_lateral_error:.3f} m, '
+                f'final_tag_id={result.final_tag_id}'
+            )
+            self.current_extinguisher_id = self.normalize_extinguisher_id(
+                result.final_tag_id
             )
             if self.start_object_detection_after_docking:
                 threading.Thread(target=self.run_inspection_sequence, daemon=True).start()
@@ -223,7 +228,8 @@ class MissionManager(Node):
                 'dock_to_tag failed: '
                 f'reason={result.reason}, '
                 f'final_distance={result.final_distance:.3f} m, '
-                f'final_lateral={result.final_lateral_error:.3f} m'
+                f'final_lateral={result.final_lateral_error:.3f} m, '
+                f'final_tag_id={result.final_tag_id}'
             )
 
     def select_cmd_vel_source(self, source):
@@ -239,6 +245,10 @@ class MissionManager(Node):
             return
 
         if not self.wait_for_object_detection_ready():
+            self.stop_object_detection()
+            return
+
+        if not self.set_object_detection_extinguisher_id():
             self.stop_object_detection()
             return
 
@@ -434,6 +444,37 @@ class MissionManager(Node):
             timeout=timeout,
         ) as response:
             return response.status, json.loads(response.read().decode('utf-8'))
+
+    @staticmethod
+    def normalize_extinguisher_id(tag_id):
+        tag_id = int(tag_id)
+        if tag_id in (1, 2, 3):
+            return tag_id
+        return 1
+
+    def set_object_detection_extinguisher_id(self):
+        extinguisher_id = self.normalize_extinguisher_id(self.current_extinguisher_id)
+        try:
+            status, response = self.read_object_detection_json(
+                f'/capture/set_extinguisher_id?id={extinguisher_id}'
+            )
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            self.get_logger().error(
+                f'Failed to set Object Detection extinguisher id: {exc}'
+            )
+            return False
+
+        if status == 200 and response.get('success'):
+            self.get_logger().info(
+                f'Object Detection capture path set to id{extinguisher_id}.'
+            )
+            return True
+
+        self.get_logger().error(
+            f'Object Detection rejected extinguisher id {extinguisher_id}: '
+            f'status={status}, response={response}'
+        )
+        return False
 
     def reset_object_detection_capture(self, side_number):
         try:

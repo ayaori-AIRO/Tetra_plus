@@ -132,6 +132,7 @@ def generate_launch_description():
             'mid_tag_size': 0.05,
             'mid_target_distance': 0.2,
             'near_tag_id': 1,
+            'near_tag_ids': [1, 2, 3],
             'near_tag_size': 0.01,
             'switch_distance': 0.45,
             'near_switch_distance': 0.25,

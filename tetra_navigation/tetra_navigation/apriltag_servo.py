@@ -99,6 +99,7 @@ class AprilTagServo(Node):
         self.declare_parameter('mid_tag_size', 0.05)
         self.declare_parameter('mid_target_distance', 0.2)
         self.declare_parameter('near_tag_id', 1)
+        self.declare_parameter('near_tag_ids', [1])
         self.declare_parameter('near_tag_size', 0.01)
         self.declare_parameter('switch_distance', 0.45)
         self.declare_parameter('near_switch_distance', 0.25)
@@ -127,6 +128,10 @@ class AprilTagServo(Node):
         self.mid_tag_size = float(self.get_parameter('mid_tag_size').value)
         self.mid_target_distance = float(self.get_parameter('mid_target_distance').value)
         self.near_tag_id = int(self.get_parameter('near_tag_id').value)
+        self.near_tag_ids = self.normalize_near_tag_ids(
+            self.get_parameter('near_tag_ids').value,
+            self.near_tag_id,
+        )
         self.near_tag_size = float(self.get_parameter('near_tag_size').value)
         self.switch_distance = float(self.get_parameter('switch_distance').value)
         self.near_switch_distance = float(self.get_parameter('near_switch_distance').value)
@@ -201,7 +206,7 @@ class AprilTagServo(Node):
                 'AprilTag servo ready: '
                 f'far_tag_id={self.tag_id}, far_tag_size={self.tag_size:.3f} m, '
                 f'mid_tag_id={self.mid_tag_id}, mid_tag_size={self.mid_tag_size:.3f} m, '
-                f'near_tag_id={self.near_tag_id}, near_tag_size={self.near_tag_size:.3f} m'
+                f'near_tag_ids={self.near_tag_ids}, near_tag_size={self.near_tag_size:.3f} m'
             )
         else:
             self.get_logger().info(
@@ -300,6 +305,8 @@ class AprilTagServo(Node):
         self.mid_tag_size = float(goal.mid_tag_size)
         self.mid_target_distance = float(goal.mid_target_distance)
         self.near_tag_id = int(goal.near_tag_id)
+        if self.near_tag_id not in self.near_tag_ids:
+            self.near_tag_ids = [self.near_tag_id]
         self.near_tag_size = float(goal.near_tag_size)
         self.near_target_distance = float(goal.near_target_distance)
         self.switch_distance = float(goal.switch_distance)
@@ -351,15 +358,27 @@ class AprilTagServo(Node):
     def select_detection(self, msg, header):
         far_detection = self.find_detection(msg, self.tag_id)
         mid_detection = self.find_detection(msg, self.mid_tag_id) if self.mid_tag_id >= 0 else None
-        near_detection = self.find_detection(msg, self.near_tag_id) if self.near_tag_id >= 0 else None
+        near_detections = [
+            (near_tag_id, self.find_detection(msg, near_tag_id))
+            for near_tag_id in self.near_tag_ids
+            if near_tag_id >= 0
+        ]
 
         far_pose = self.solve_tag_pose(far_detection, header, self.tag_size) if far_detection is not None else None
         mid_pose = self.solve_tag_pose(mid_detection, header, self.mid_tag_size) if mid_detection is not None else None
-        near_pose = self.solve_tag_pose(near_detection, header, self.near_tag_size) if near_detection is not None else None
+        near_candidates = []
+        for near_tag_id, near_detection in near_detections:
+            if near_detection is None:
+                continue
+            near_pose = self.solve_tag_pose(near_detection, header, self.near_tag_size)
+            if near_pose is not None:
+                near_candidates.append((near_pose, near_tag_id))
+        near_candidates.sort(key=lambda item: item[0].pose.position.z)
+        near_pose, near_tag_id = near_candidates[0] if near_candidates else (None, -1)
 
         if near_pose is not None:
             if mid_pose is None or mid_pose.pose.position.z <= self.near_switch_distance:
-                return near_pose, self.near_target_distance, self.near_tag_id
+                return near_pose, self.near_target_distance, near_tag_id
 
         if mid_pose is not None:
             if far_pose is None or far_pose.pose.position.z <= self.switch_distance:
@@ -372,7 +391,7 @@ class AprilTagServo(Node):
             ids = ', '.join(str(d.id) for d in msg.detections)
             if self.mid_tag_id >= 0 or self.near_tag_id >= 0:
                 self.get_logger().debug(
-                    f'Ignoring tag ids [{ids}], waiting for ids {self.tag_id}, {self.mid_tag_id}, or {self.near_tag_id}.'
+                    f'Ignoring tag ids [{ids}], waiting for ids {self.tag_id}, {self.mid_tag_id}, or {self.near_tag_ids}.'
                 )
             else:
                 self.get_logger().debug(f'Ignoring tag ids [{ids}], waiting for id {self.tag_id}.')
@@ -384,6 +403,18 @@ class AprilTagServo(Node):
             if int(detection.id) == tag_id:
                 return detection
         return None
+
+    @staticmethod
+    def normalize_near_tag_ids(value, fallback_id):
+        if isinstance(value, (list, tuple)):
+            ids = [int(item) for item in value]
+        else:
+            ids = [int(value)]
+
+        if fallback_id not in ids:
+            ids.insert(0, int(fallback_id))
+
+        return list(dict.fromkeys(ids))
 
     def solve_tag_pose(self, detection, header, tag_size):
         half = tag_size / 2.0
