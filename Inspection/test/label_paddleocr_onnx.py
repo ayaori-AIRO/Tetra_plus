@@ -54,6 +54,19 @@ def judge_expiry_status(expiry, today=None):
     return "정상"
 
 
+def dewarp_label_image(image, curve_strength=0.0):
+    if abs(curve_strength) < 1e-6:
+        return image
+
+    h, w = image.shape[:2]
+    xs, ys = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+    x_norm = (xs - (w - 1) / 2.0) / max(1.0, (w - 1) / 2.0)
+    y_shift = curve_strength * h * (x_norm ** 2)
+    map_x = xs
+    map_y = np.clip(ys + y_shift, 0, h - 1).astype(np.float32)
+    return cv2.remap(image, map_x, map_y, cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+
 def resize_det_image(image, resize_long=960):
     h, w = image.shape[:2]
     ratio = float(resize_long) / max(h, w)
@@ -328,6 +341,7 @@ def main():
     parser.add_argument("--det-thresh", type=float, default=0.2)
     parser.add_argument("--box-thresh", type=float, default=0.4)
     parser.add_argument("--unclip", type=float, default=2.0)
+    parser.add_argument("--dewarp", type=float, default=-0.06)
     parser.add_argument("--display-scale", type=float, default=1.0)
     parser.add_argument("--no-show", action="store_true")
     args = parser.parse_args()
@@ -335,6 +349,7 @@ def main():
     image = cv2.imread(str(Path(args.image)))
     if image is None:
         raise FileNotFoundError(args.image)
+    image = dewarp_label_image(image, args.dewarp)
 
     providers = get_onnx_providers()
     print(f"ONNX Runtime providers: {providers}", flush=True)
@@ -353,13 +368,14 @@ def main():
     rec_rows = recognize_crops(rec_session, crops, characters)
     rows = [(box, text, score) for box, (text, score) in zip(boxes, rec_rows) if text.strip()]
     full_text = " ".join(text for _, text, _ in rows)
+
     expiry = extract_expiry(full_text)
     today = get_korea_today()
     status = judge_expiry_status(expiry, today)
 
     print("=== ONNX OCR detected text ===", flush=True)
     print(
-        f"det_thresh={args.det_thresh}, box_thresh={args.box_thresh}, unclip={args.unclip}, boxes={len(boxes)}",
+        f"det_thresh={args.det_thresh}, box_thresh={args.box_thresh}, unclip={args.unclip}, dewarp={args.dewarp}, boxes={len(boxes)}",
         flush=True,
     )
     if not rows:

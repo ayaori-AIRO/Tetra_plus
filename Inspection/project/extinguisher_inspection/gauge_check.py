@@ -11,7 +11,7 @@ SAFE_ANGLE_MIN = 85
 SAFE_ANGLE_MAX = 95
 
 gauge_img = cv2.imread(
-    "/home/ayaori/ros2_ws/src/tetra/Inspection/capture/inspection/pressure_gauge/camera1_20260524_012222_96.jpg"
+    "/home/ltg/ros2_ws/src/tetra/Inspection/capture/inspection/pressure_gauge/camera1_20260524_012222_96.jpg"
 )
 if gauge_img is None:
     print("[gauge_debug] 이미지를 불러올 수 없습니다.")
@@ -72,7 +72,7 @@ green_kernel = np.ones((3, 3), np.uint8)
 # 2. 정상 범위 HSV 추출
 # ================================
 lower_green = np.array([22, 25, 25])
-upper_green = np.array([100, 255, 255])
+upper_green = np.array([115, 255, 255])
 green_mask = cv2.inRange(hsv, lower_green, upper_green)
 clean_green = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, green_kernel)
 
