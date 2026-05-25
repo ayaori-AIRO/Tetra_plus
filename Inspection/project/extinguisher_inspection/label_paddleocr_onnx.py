@@ -13,7 +13,7 @@ import pyclipper
 import yaml
 
 
-INSPECTION_DIR = Path(__file__).resolve().parents[1]
+INSPECTION_DIR = Path(__file__).resolve().parents[2]
 ONNX_MODEL_DIR = INSPECTION_DIR / "onnx_models"
 
 

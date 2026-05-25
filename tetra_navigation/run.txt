@@ -26,3 +26,6 @@ python3 neopixel_controller.py off
 python3 Inspection/project/motor_controller.py up
 
 ros2 run tetra_teleop tetra_teleop_keyboard 
+
+cd /home/ayaori/ros2_ws/src/tetra/Inspection/project
+python3 Object_Detection_Live.py

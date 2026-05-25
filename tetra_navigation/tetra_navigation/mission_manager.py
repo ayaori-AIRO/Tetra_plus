@@ -42,6 +42,7 @@ class MissionManager(Node):
         self.declare_parameter('object_detection_viewer_timeout_sec', 30.0)
         self.declare_parameter('object_detection_capture_timeout_sec', 20.0)
         self.declare_parameter('inspection_side_count', 4)
+        self.declare_parameter('st3235_return_step_delay_sec', 1.0)
         self.declare_parameter('inspection_duration_sec', 60.0)
         self.autostart = bool(self.get_parameter('autostart').value)
         self.start_docking_after_nav_active = bool(
@@ -74,6 +75,9 @@ class MissionManager(Node):
         )
         self.inspection_side_count = int(
             self.get_parameter('inspection_side_count').value
+        )
+        self.st3235_return_step_delay_sec = float(
+            self.get_parameter('st3235_return_step_delay_sec').value
         )
         self.inspection_duration_sec = float(
             self.get_parameter('inspection_duration_sec').value
@@ -261,6 +265,10 @@ class MissionManager(Node):
                 self.stop_object_detection()
                 return
 
+        if not self.return_st3235_to_home():
+            self.stop_object_detection()
+            return
+
         self.stop_object_detection()
 
     def turn_on_internal_led(self):
@@ -356,6 +364,60 @@ class MissionManager(Node):
                 f'ST3235 90 degree command failed: returncode={completed.returncode}'
             )
             return False
+
+        return True
+
+    def rotate_st3235_minus_90(self):
+        if not os.path.exists(self.motor_controller_script):
+            self.get_logger().error(
+                f'Motor controller script not found: {self.motor_controller_script}'
+            )
+            return False
+
+        self.get_logger().info('Rotating ST3235 -90 degrees toward home.')
+        completed = subprocess.run(
+            ['python3', self.motor_controller_script, 'st-90'],
+            capture_output=True,
+            text=True,
+            timeout=20.0,
+            check=False,
+        )
+
+        if completed.stdout:
+            for line in completed.stdout.splitlines():
+                self.get_logger().info(f'motor: {line}')
+
+        if completed.stderr:
+            for line in completed.stderr.splitlines():
+                self.get_logger().warn(f'motor stderr: {line}')
+
+        if completed.returncode != 0:
+            self.get_logger().error(
+                f'ST3235 -90 degree command failed: returncode={completed.returncode}'
+            )
+            return False
+
+        return True
+
+    def return_st3235_to_home(self):
+        return_steps = max(0, self.inspection_side_count - 1)
+        self.get_logger().info(
+            f'Returning ST3235 to home in {return_steps} step(s).'
+        )
+
+        for step_index in range(return_steps):
+            self.get_logger().info(
+                f'ST3235 return step {step_index + 1}/{return_steps}.'
+            )
+            if not self.rotate_st3235_minus_90():
+                return False
+
+            if step_index < return_steps - 1 and self.st3235_return_step_delay_sec > 0.0:
+                self.get_logger().info(
+                    f'Waiting {self.st3235_return_step_delay_sec:.1f}s before '
+                    'next ST3235 return step.'
+                )
+                time.sleep(self.st3235_return_step_delay_sec)
 
         return True
 

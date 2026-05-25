@@ -22,6 +22,8 @@ PORT = 8000
 STREAM_FPS = 12
 DETECTION_LOG_ENABLED = os.environ.get("TETRA_DETECTION_LOG", "summary").lower()
 DETECTION_LOG_INTERVAL = float(os.environ.get("TETRA_DETECTION_LOG_INTERVAL", "5.0"))
+MIN_FRONT_LABEL_WIDTH = int(os.environ.get("TETRA_MIN_FRONT_LABEL_WIDTH", "220"))
+MIN_FRONT_LABEL_HEIGHT = int(os.environ.get("TETRA_MIN_FRONT_LABEL_HEIGHT", "160"))
 
 latest_frames = {
     "camera1": None,
@@ -305,6 +307,22 @@ def capture_fire_extinguisher(frame, detection):
 
 
 def capture_label(frame, detection):
+    box = clamp_box(frame, detection)
+    if box is None:
+        return None
+
+    x1, y1, x2, y2 = box
+    label_width = x2 - x1
+    label_height = y2 - y1
+
+    if label_width < MIN_FRONT_LABEL_WIDTH or label_height < MIN_FRONT_LABEL_HEIGHT:
+        print(
+            "[라벨 캡쳐 무시] 정면 라벨 크기 부족: "
+            f"{label_width}x{label_height}, "
+            f"min={MIN_FRONT_LABEL_WIDTH}x{MIN_FRONT_LABEL_HEIGHT}"
+        )
+        return None
+
     return capture_detection(frame, detection, "라벨")
 
 

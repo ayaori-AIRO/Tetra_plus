@@ -1,18 +1,18 @@
 import cv2
 import numpy as np
 import os
-import json
 import math
 
 # ================================
 # 0. 설정 및 로드
 # ================================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-model_config_path = os.path.join(BASE_DIR, "config", "model_config.json")
-with open(model_config_path, "r") as f:
-    model_config = json.load(f)
+SAFE_ANGLE_MIN = 85
+SAFE_ANGLE_MAX = 95
 
-gauge_img = cv2.imread(os.path.join(BASE_DIR, "capture", "Real_Environment", "pressure_gauge", "camera1_pressure_gauge_20260507_011409_1.jpg"))
+gauge_img = cv2.imread(
+    "/home/ayaori/ros2_ws/src/tetra/Inspection/capture/inspection/pressure_gauge/camera1_20260524_012222_96.jpg"
+)
 if gauge_img is None:
     print("[gauge_debug] 이미지를 불러올 수 없습니다.")
     exit()
@@ -77,8 +77,8 @@ green_mask = cv2.inRange(hsv, lower_green, upper_green)
 clean_green = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, green_kernel)
 
 green_contours, _ = cv2.findContours(clean_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-safe_min = model_config.get("safe_angle_min", 85)
-safe_max = model_config.get("safe_angle_max", 95)
+safe_min = SAFE_ANGLE_MIN
+safe_max = SAFE_ANGLE_MAX
 configured_safe_min = safe_min
 configured_safe_max = safe_max
 

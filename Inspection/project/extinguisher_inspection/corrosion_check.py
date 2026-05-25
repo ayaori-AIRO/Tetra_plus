@@ -317,7 +317,10 @@ def resize_for_display(image, scale):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="HSV + texture corrosion checker for fire extinguisher crops")
-    parser.add_argument("--image", default="capture/Real_Environment/corrosion/corrosion.png")
+    parser.add_argument(
+        "--image",
+        default="/home/ayaori/ros2_ws/src/tetra/Inspection/capture/Real_Environment/corrosion/corrosion_2.png",
+    )
     parser.add_argument("--tile-size", type=int, default=64)
     parser.add_argument("--color-ratio", type=float, default=0.018)
     parser.add_argument("--texture-thresh", type=float, default=18.0)
