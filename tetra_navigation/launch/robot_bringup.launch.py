@@ -18,12 +18,14 @@ def generate_launch_description():
 
     use_react = LaunchConfiguration('use_react')
     react_dir = LaunchConfiguration('react_dir')
+    react_port = LaunchConfiguration('react_port')
     use_react_dev_server = LaunchConfiguration('use_react_dev_server')
     react_start_delay = LaunchConfiguration('react_start_delay')
     use_object_detection = LaunchConfiguration('use_object_detection')
     object_detection_script = LaunchConfiguration('object_detection_script')
     neopixel_controller_script = LaunchConfiguration('neopixel_controller_script')
     motor_controller_script = LaunchConfiguration('motor_controller_script')
+    inspection_pipeline_script = LaunchConfiguration('inspection_pipeline_script')
     object_detection_start_delay = LaunchConfiguration('object_detection_start_delay')
     use_realsense = LaunchConfiguration('use_realsense')
     use_apriltag = LaunchConfiguration('use_apriltag')
@@ -169,6 +171,7 @@ def generate_launch_description():
             'object_detection_script': object_detection_script,
             'neopixel_controller_script': neopixel_controller_script,
             'motor_controller_script': motor_controller_script,
+            'inspection_pipeline_script': inspection_pipeline_script,
         }],
         condition=IfCondition(use_mission_manager),
     )
@@ -180,7 +183,7 @@ def generate_launch_description():
         output='screen',
         additional_env={
             'BROWSER': 'none',
-            'PORT': '3000',
+            'PORT': react_port,
             'CHOKIDAR_USEPOLLING': 'false',
             'WATCHPACK_POLLING': 'false',
         },
@@ -192,7 +195,7 @@ def generate_launch_description():
             'python3',
             '-m',
             'http.server',
-            '3000',
+            react_port,
             '--bind',
             '0.0.0.0',
             '--directory',
@@ -253,6 +256,11 @@ def generate_launch_description():
             description='Path to the React inspection web app.'
         ),
         DeclareLaunchArgument(
+            'react_port',
+            default_value='3000',
+            description='Port for the React inspection web app.'
+        ),
+        DeclareLaunchArgument(
             'use_react_dev_server',
             default_value='false',
             description='Use npm start instead of serving the React build directory.'
@@ -281,6 +289,11 @@ def generate_launch_description():
             'motor_controller_script',
             default_value='/home/ayaori/ros2_ws/src/tetra/Inspection/project/motor_controller.py',
             description='Path to the inspection motor controller script.'
+        ),
+        DeclareLaunchArgument(
+            'inspection_pipeline_script',
+            default_value='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',
+            description='Path to the inspection pipeline script.'
         ),
         DeclareLaunchArgument(
             'object_detection_start_delay',

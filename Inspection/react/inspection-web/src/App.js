@@ -34,9 +34,9 @@ function App() {
   const photoModalRef = useRef(null);
   const streamRetryTimerRef = useRef(null);
   const extinguisherNames = [
-    "ID:1 (B1F 복도 A)",
-    "ID:2 B1F 복도B",
-    "ID:3 B1F 비상구 앞",
+    "EXT1 (B1F 복도 A)",
+    "EXT2 B1F 복도B",
+    "EXT3 B1F 비상구 앞",
   ];
 
   const filterStartDate = new Date(filterStartYear, filterStartMonth - 1, filterStartDay);
@@ -83,8 +83,33 @@ function App() {
     return `${year}년 ${month}월 ${day}일 ${hour}:${minute}`;
   };
 
-  const getExtinguisherName = (item, index) =>
-    extinguisherNames[index % 3] || item.extinguisher_id;
+  const getExtinguisherName = (item, index) => {
+    const match = String(item.extinguisher_id || "").match(/(?:id|ext)([1-3])/i);
+    if (match) {
+      return extinguisherNames[Number(match[1]) - 1];
+    }
+    return item.extinguisher_id || extinguisherNames[index % 3];
+  };
+
+  const getPressureText = (item) => {
+    if (item.pressure === "normal") {
+      return "정상";
+    }
+    if (item.pressure === "low") {
+      return "낮음";
+    }
+    return item.pressure || "판정불가";
+  };
+
+  const getAppearanceText = (item) => {
+    if (item.appearance === "clean") {
+      return "정상";
+    }
+    if (item.appearance === "dirty") {
+      return "부식";
+    }
+    return item.appearance || "판정불가";
+  };
 
   const filteredRecords = data.filter((item, index) => {
     if (!appliedFilter) {
@@ -93,13 +118,60 @@ function App() {
 
     const itemTime = getItemTime(item);
     const inDateRange = !itemTime || (itemTime >= appliedFilter.startDate && itemTime <= appliedFilter.endDate);
+    const match = String(item.extinguisher_id || "").match(/(?:id|ext)([1-3])/i);
+    const itemExtinguisherNumber = match ? Number(match[1]) : (index % 3) + 1;
     const inExtinguisherRange =
-      appliedFilter.extinguisher === "all" || index % 3 === Number(appliedFilter.extinguisher) - 1;
+      appliedFilter.extinguisher === "all" || itemExtinguisherNumber === Number(appliedFilter.extinguisher);
 
     return inDateRange && inExtinguisherRange;
   });
 
   const selectedPhotoRecord = filteredRecords.find((item) => item.id === selectedPhotoRecordId);
+
+  const getAppearanceImageUrls = (item) => {
+    if (!item) {
+      return [];
+    }
+
+    if (Array.isArray(item.appearance_images) && item.appearance_images.length > 0) {
+      return item.appearance_images.filter(Boolean);
+    }
+
+    if (Array.isArray(item.appearance_sides) && item.appearance_sides.length > 0) {
+      return item.appearance_sides.map((side) => side.image).filter(Boolean);
+    }
+
+    return item.appearance_image ? [item.appearance_image] : [];
+  };
+
+  const getInspectionPhotoItems = (item) => {
+    if (!item) {
+      return [];
+    }
+
+    const photos = [];
+    if (item.pressure_image) {
+      photos.push({ label: "압력 게이지", src: item.pressure_image });
+    }
+    if (item.expiry_image) {
+      photos.push({ label: "라벨", src: item.expiry_image });
+    }
+
+    getAppearanceImageUrls(item).forEach((src, index) => {
+      photos.push({ label: `부식 ${index + 1}면`, src });
+    });
+
+    return photos;
+  };
+
+  const openExpandedPhoto = (photo) => {
+    setPhotoZoom(1);
+    setPhotoPosition({ x: 0, y: 0 });
+    setExpandedPhoto({
+      src: photo.src,
+      alt: photo.label,
+    });
+  };
 
   const retryLiveStream = (cameraName) => {
     setLiveConnected((prev) => ({
@@ -289,7 +361,7 @@ function App() {
                   </div>
                 </div>
                 <div className="inspection-log-panel">
-                  <div>[22:45:01] ID:1 이동 시작</div>
+                  <div>[22:45:01] EXT1 이동 시작</div>
                   <div>[22:45:08] 카메라 촬영 완료</div>
                   <div>[22:45:10] 압력게이지 정상</div>
                   <div>[22:45:12] OCR 완료</div>
@@ -303,9 +375,9 @@ function App() {
               <div className="command-group">
                 <div className="command-group-title">개별 검사</div>
                 <div className="command-button-stack">
-                  <button type="button">ID : 1</button>
-                  <button type="button">ID : 2</button>
-                  <button type="button">ID : 3</button>
+                  <button type="button">EXT1</button>
+                  <button type="button">EXT2</button>
+                  <button type="button">EXT3</button>
                 </div>
               </div>
 
@@ -414,63 +486,20 @@ function App() {
                     : "소화기 ID를 선택하면 해당 날짜 사진이 표시됩니다"}
                 </div>
                 <div className="calendar-photo-stack">
-                  <button
-                    className="calendar-photo-box"
-                    type="button"
-                    onClick={() =>
-                      {
-                      setPhotoZoom(1);
-                      setPhotoPosition({ x: 0, y: 0 });
-                      setExpandedPhoto({
-                        src: "/inspection-images/camera1_pressure_gauge_20260507_011409_1.jpg",
-                        alt: "게이지 사진",
-                      });
-                    }
-                    }
-                  >
-                    <img
-                      src="/inspection-images/camera1_pressure_gauge_20260507_011409_1.jpg"
-                      alt="게이지 사진"
-                    />
-                  </button>
-                  <button
-                    className="calendar-photo-box"
-                    type="button"
-                    onClick={() =>
-                      {
-                      setPhotoZoom(1);
-                      setPhotoPosition({ x: 0, y: 0 });
-                      setExpandedPhoto({
-                        src: "/inspection-images/corrosion_2.png",
-                        alt: "부식 사진",
-                      });
-                    }
-                    }
-                  >
-                    <img
-                      src="/inspection-images/corrosion_2.png"
-                      alt="부식 사진"
-                    />
-                  </button>
-                  <button
-                    className="calendar-photo-box"
-                    type="button"
-                    onClick={() =>
-                      {
-                      setPhotoZoom(1);
-                      setPhotoPosition({ x: 0, y: 0 });
-                      setExpandedPhoto({
-                        src: "/inspection-images/camera1_label_20260507_011413_1.jpg",
-                        alt: "라벨 사진",
-                      });
-                    }
-                    }
-                  >
-                    <img
-                      src="/inspection-images/camera1_label_20260507_011413_1.jpg"
-                      alt="라벨 사진"
-                    />
-                  </button>
+                  {getInspectionPhotoItems(selectedPhotoRecord).map((photo) => (
+                    <button
+                      className="calendar-photo-box"
+                      type="button"
+                      key={`${photo.label}-${photo.src}`}
+                      onClick={() => openExpandedPhoto(photo)}
+                    >
+                      <img src={photo.src} alt={photo.label} />
+                      <span>{photo.label}</span>
+                    </button>
+                  ))}
+                  {selectedPhotoRecord && getInspectionPhotoItems(selectedPhotoRecord).length === 0 && (
+                    <div className="calendar-photo-empty">사진 없음</div>
+                  )}
                 </div>
               </div>
 
@@ -541,10 +570,10 @@ function App() {
                     value={filterExtinguisher}
                     onChange={(event) => setFilterExtinguisher(event.target.value)}
                   >
-                    <option value="all">전체 ID</option>
-                    <option value="1">ID:1</option>
-                    <option value="2">ID:2</option>
-                    <option value="3">ID:3</option>
+                    <option value="all">전체 EXT</option>
+                    <option value="1">EXT1</option>
+                    <option value="2">EXT2</option>
+                    <option value="3">EXT3</option>
                   </select>
                   <button
                     className="date-filter-apply"
@@ -601,9 +630,9 @@ function App() {
                             </button>
                           </td>
                           <td>B1F</td>
-                          <td>{item.pressure === "normal" ? "정상" : "낮음"}</td>
-                          <td>{item.appearance === "clean" ? "양호" : "오염"}</td>
-                          <td>{item.expiry || "2028:05"}</td>
+                          <td>{getPressureText(item)}</td>
+                          <td>{getAppearanceText(item)}</td>
+                          <td>{item.expiry || "판정불가"}</td>
                           <td
                             className={
                               item.result === "pass"

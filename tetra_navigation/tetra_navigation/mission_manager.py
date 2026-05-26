@@ -36,6 +36,10 @@ class MissionManager(Node):
             'motor_controller_script',
             '/home/ayaori/ros2_ws/src/tetra/Inspection/project/motor_controller.py',
         )
+        self.declare_parameter(
+            'inspection_pipeline_script',
+            '/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',
+        )
         self.declare_parameter('start_object_detection_after_docking', True)
         self.declare_parameter('object_detection_health_url', 'http://127.0.0.1:8000/health')
         self.declare_parameter('object_detection_ready_timeout_sec', 15.0)
@@ -57,6 +61,9 @@ class MissionManager(Node):
         )
         self.motor_controller_script = str(
             self.get_parameter('motor_controller_script').value
+        )
+        self.inspection_pipeline_script = str(
+            self.get_parameter('inspection_pipeline_script').value
         )
         self.start_object_detection_after_docking = bool(
             self.get_parameter('start_object_detection_after_docking').value
@@ -280,6 +287,7 @@ class MissionManager(Node):
             return
 
         self.stop_object_detection()
+        self.run_inspection_pipeline()
 
     def turn_on_internal_led(self):
         if not os.path.exists(self.neopixel_controller_script):
@@ -677,6 +685,39 @@ class MissionManager(Node):
             self.object_detection_process.wait(timeout=2.0)
         finally:
             self.object_detection_process = None
+
+    def run_inspection_pipeline(self):
+        if not os.path.exists(self.inspection_pipeline_script):
+            self.get_logger().error(
+                f'Inspection pipeline script not found: {self.inspection_pipeline_script}'
+            )
+            return False
+
+        self.get_logger().info('Running extinguisher inspection pipeline.')
+        completed = subprocess.run(
+            ['python3', self.inspection_pipeline_script],
+            capture_output=True,
+            text=True,
+            timeout=180.0,
+            check=False,
+        )
+
+        if completed.stdout:
+            for line in completed.stdout.splitlines():
+                self.get_logger().info(f'inspection_pipeline: {line}')
+
+        if completed.stderr:
+            for line in completed.stderr.splitlines():
+                self.get_logger().warn(f'inspection_pipeline stderr: {line}')
+
+        if completed.returncode != 0:
+            self.get_logger().error(
+                f'Inspection pipeline failed: returncode={completed.returncode}'
+            )
+            return False
+
+        self.get_logger().info('Inspection pipeline finished.')
+        return True
 
 
 def main(args=None):
