@@ -660,6 +660,20 @@ h1 {
   background: #1858c9;
 }
 
+.date-filter-apply:disabled,
+.date-filter-apply:disabled:hover {
+  background: #96a8b8;
+  border-color: #96a8b8;
+  cursor: not-allowed;
+}
+
+.date-filter-error {
+  flex-basis: 100%;
+  color: #d92d20;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .history-script-list {
   display: flex;
   flex-direction: column;

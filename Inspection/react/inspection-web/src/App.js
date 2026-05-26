@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "./firebase";
 import "./App.css";
 
@@ -20,6 +20,7 @@ function App() {
   const [filterEndDay, setFilterEndDay] = useState(today.getDate());
   const [filterExtinguisher, setFilterExtinguisher] = useState("all");
   const [appliedFilter, setAppliedFilter] = useState(null);
+  const [filterError, setFilterError] = useState("");
   const [selectedPhotoRecordId, setSelectedPhotoRecordId] = useState("");
   const [expandedPhoto, setExpandedPhoto] = useState(null);
   const [photoZoom, setPhotoZoom] = useState(1);
@@ -41,6 +42,7 @@ function App() {
 
   const filterStartDate = new Date(filterStartYear, filterStartMonth - 1, filterStartDay);
   const filterEndDate = new Date(filterEndYear, filterEndMonth - 1, filterEndDay, 23, 59, 59);
+  const isFilterDateRangeInvalid = filterStartDate > filterEndDate;
   const yearOptions = Array.from(
     { length: today.getFullYear() - oneYearAgo.getFullYear() + 1 },
     (_, index) => oneYearAgo.getFullYear() + index
@@ -127,6 +129,9 @@ function App() {
   });
 
   const selectedPhotoRecord = filteredRecords.find((item) => item.id === selectedPhotoRecordId);
+  const dateFilterMessage = isFilterDateRangeInvalid
+    ? "시작일은 종료일보다 늦을 수 없습니다."
+    : filterError;
 
   const getAppearanceImageUrls = (item) => {
     if (!item) {
@@ -208,23 +213,34 @@ function App() {
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      const q = query(
-        collection(db, "inspection"),
-        orderBy("time", "desc")
-      );
+    const q = query(
+      collection(db, "inspection"),
+      orderBy("time", "desc")
+    );
 
-      const querySnapshot = await getDocs(q);
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const result = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
 
-      const result = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+        setData(result);
+        setSelectedPhotoRecordId((selectedId) => {
+          if (!selectedId || result.some((item) => item.id === selectedId)) {
+            return selectedId;
+          }
 
-      setData(result);
-    };
+          return "";
+        });
+      },
+      (error) => {
+        console.error("Inspection history realtime update failed:", error);
+      }
+    );
 
-    loadData();
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -578,17 +594,29 @@ function App() {
                   <button
                     className="date-filter-apply"
                     type="button"
+                    disabled={isFilterDateRangeInvalid}
                     onClick={() => {
+                      if (isFilterDateRangeInvalid) {
+                        setFilterError("시작일은 종료일보다 늦을 수 없습니다.");
+                        return;
+                      }
+
                       setAppliedFilter({
                         startDate: filterStartDate,
                         endDate: filterEndDate,
                         extinguisher: filterExtinguisher,
                       });
+                      setFilterError("");
                       setSelectedPhotoRecordId("");
                     }}
                   >
                     적용
                   </button>
+                  {dateFilterMessage && (
+                    <div className="date-filter-error" role="alert">
+                      {dateFilterMessage}
+                    </div>
+                  )}
                 </div>
                 <h2>검사 결과</h2>
 
