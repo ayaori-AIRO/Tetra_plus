@@ -13,6 +13,8 @@ setup(
 	    ('share/tetra_navigation/launch', [
             'launch/bringup_launch.py',
             'launch/robot_bringup.launch.py',
+            'launch/robot_bringup_proto.launch.py',
+            'launch/robot_bringup_proto_nodes.launch.py',
             'launch/rviz_launch.py',
             'launch/view_sllidar_a2m12_launch.py',
             'launch/waypoint_follower_launch.py',
@@ -39,6 +41,7 @@ setup(
             'apriltag_servo = tetra_navigation.apriltag_servo:main',
             'cmd_vel_mux = tetra_navigation.cmd_vel_mux:main',
             'mission_manager = tetra_navigation.mission_manager:main',
+            'mission_manager_proto = tetra_navigation.mission_manager_proto:main',
         ],
     },
 )

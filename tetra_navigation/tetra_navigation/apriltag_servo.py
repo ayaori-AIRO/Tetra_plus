@@ -105,7 +105,7 @@ class AprilTagServo(Node):
         self.declare_parameter('near_switch_distance', 0.25)
         self.declare_parameter('near_target_distance', 0.03)
         self.declare_parameter('distance_tolerance', 0.001)
-        self.declare_parameter('lateral_tolerance', 0.015)
+        self.declare_parameter('lateral_tolerance', 0.006)
         self.declare_parameter('linear_gain', 0.25)
         self.declare_parameter('angular_gain', 0.8)
         self.declare_parameter('min_linear_speed', 0.003)

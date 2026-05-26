@@ -19,7 +19,7 @@ ros2 run tetra_navigation apriltag_servo
 
 ---------------------------------------------------
 
-ros2 launch tetra_navigation robot_bringup.launch.py
+ros2 launch tetra_navigation robot_bringup.launch.py mission_autostart:=true
 
 python3 neopixel_controller.py off
 
