@@ -1,5 +1,5 @@
-import argparse
 from pathlib import Path
+import argparse
 
 import cv2
 import numpy as np
@@ -10,18 +10,24 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 
 def fill_body_rows(red_mask, image_shape):
     body_mask = np.zeros(red_mask.shape, dtype=np.uint8)
-    min_row_width = int(image_shape[1] * 0.14)
+    min_segment_width = max(12, int(image_shape[1] * 0.04))
 
     for y in range(red_mask.shape[0]):
         xs = np.where(red_mask[y] > 0)[0]
-        if xs.size < min_row_width:
+        if xs.size < min_segment_width:
             continue
-        x1, x2 = int(xs.min()), int(xs.max())
-        if x2 - x1 < min_row_width:
-            continue
-        if y > image_shape[0] * 0.78 and x2 - x1 > image_shape[1] * 0.42:
-            continue
-        cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
+
+        gaps = np.where(np.diff(xs) > 1)[0]
+        starts = np.r_[0, gaps + 1]
+        ends = np.r_[gaps, xs.size - 1]
+
+        for start, end in zip(starts, ends):
+            x1, x2 = int(xs[start]), int(xs[end])
+            if x2 - x1 < min_segment_width:
+                continue
+            if y > image_shape[0] * 0.78 and x2 - x1 > image_shape[1] * 0.42:
+                continue
+            cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
 
     return body_mask
 
@@ -78,7 +84,7 @@ def build_corrosion_color_mask(image, body_mask, red_mask, label_mask):
     not_red = red_mask == 0
     in_body = (body_mask > 0) & (label_mask == 0)
 
-    mask = (((brown_rust & not_red) | dark_damage) & in_body).astype(np.uint8) * 255
+    mask = ((brown_rust | dark_damage) & not_red & in_body).astype(np.uint8) * 255
     mask = cv2.medianBlur(mask, 3)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
