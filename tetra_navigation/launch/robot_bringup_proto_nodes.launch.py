@@ -14,6 +14,10 @@ def generate_launch_description():
     object_detection_script = LaunchConfiguration('object_detection_script')
     neopixel_controller_script = LaunchConfiguration('neopixel_controller_script')
     inspection_pipeline_script = LaunchConfiguration('inspection_pipeline_script')
+    forward_after_inspection = LaunchConfiguration('forward_after_inspection')
+    forward_distance = LaunchConfiguration('forward_distance')
+    forward_speed = LaunchConfiguration('forward_speed')
+    forward_time_allowance_sec = LaunchConfiguration('forward_time_allowance_sec')
     use_proto_mission_manager = LaunchConfiguration('use_proto_mission_manager')
 
     return LaunchDescription([
@@ -48,6 +52,26 @@ def generate_launch_description():
             description='Path to the inspection pipeline script.'
         ),
         DeclareLaunchArgument(
+            'forward_after_inspection',
+            default_value='true',
+            description='Drive forward after front-only inspection finishes.'
+        ),
+        DeclareLaunchArgument(
+            'forward_distance',
+            default_value='1.0',
+            description='Forward distance in meters after inspection.'
+        ),
+        DeclareLaunchArgument(
+            'forward_speed',
+            default_value='0.03',
+            description='Forward speed in m/s after inspection.'
+        ),
+        DeclareLaunchArgument(
+            'forward_time_allowance_sec',
+            default_value='10.0',
+            description='Time allowance in seconds for forward drive.'
+        ),
+        DeclareLaunchArgument(
             'use_proto_mission_manager',
             default_value='true',
             description='Start the proto mission manager node.'
@@ -64,6 +88,10 @@ def generate_launch_description():
                 'object_detection_script': object_detection_script,
                 'neopixel_controller_script': neopixel_controller_script,
                 'inspection_pipeline_script': inspection_pipeline_script,
+                'forward_after_inspection': forward_after_inspection,
+                'forward_distance': forward_distance,
+                'forward_speed': forward_speed,
+                'forward_time_allowance_sec': forward_time_allowance_sec,
             }],
             condition=IfCondition(use_proto_mission_manager),
         ),

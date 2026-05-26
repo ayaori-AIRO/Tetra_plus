@@ -56,7 +56,7 @@ def publish_result_image(local_path, result_dir):
     if not local_path or not Path(local_path).exists():
         return ""
 
-    relative_path = Path(result_dir.name) / Path(local_path).relative_to(result_dir)
+    relative_path = Path(local_path).relative_to(CAPTURE_DIR)
     public_path = REACT_PUBLIC_RESULT_DIR / relative_path
     public_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(local_path, public_path)
@@ -368,9 +368,12 @@ def inspect_extinguisher(
     label_inspector,
     send_firebase=True,
     corrosion_side_count=CORROSION_SIDE_COUNT,
+    run_id=None,
 ):
     capture_dir = CAPTURE_DIR / extinguisher_id
-    result_dir = CAPTURE_DIR / f"{extinguisher_id}_inspection"
+    inspection_time = datetime.now(ZoneInfo("Asia/Seoul"))
+    run_id = run_id or inspection_time.strftime("%Y%m%d_%H%M%S")
+    result_dir = CAPTURE_DIR / f"{extinguisher_id}_inspection" / run_id
     ensure_result_dirs(result_dir)
 
     corrosion = inspect_corrosion(capture_dir, result_dir, side_count=corrosion_side_count)
@@ -429,7 +432,8 @@ def inspect_extinguisher(
         "expiry": label["expiry"],
         "expiry_date": label["expiry_date"],
         "result": result,
-        "time": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(timespec="seconds"),
+        "time": inspection_time.isoformat(timespec="seconds"),
+        "run_id": run_id,
         "pressure_image": pressure_image_url,
         "appearance_image": appearance_image_url,
         "appearance_images": appearance_side_urls,
@@ -453,6 +457,11 @@ def parse_args():
     parser.add_argument("--ids", nargs="+", default=["id1", "id2", "id3"])
     parser.add_argument("--no-firebase", action="store_true")
     parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Inspection result folder name. Defaults to current Korea timestamp.",
+    )
+    parser.add_argument(
         "--corrosion-side-count",
         type=int,
         default=CORROSION_SIDE_COUNT,
@@ -464,6 +473,7 @@ def parse_args():
 def main():
     args = parse_args()
     label_inspector = LabelInspector()
+    run_id = args.run_id or datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y%m%d_%H%M%S")
     results = []
     for extinguisher_id in args.ids:
         result = inspect_extinguisher(
@@ -471,6 +481,7 @@ def main():
             label_inspector,
             send_firebase=not args.no_firebase,
             corrosion_side_count=args.corrosion_side_count,
+            run_id=run_id,
         )
         results.append(result)
         print(json.dumps(result, ensure_ascii=False), flush=True)

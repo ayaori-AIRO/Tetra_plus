@@ -7,6 +7,11 @@ import time
 import urllib.error
 
 import rclpy
+from action_msgs.msg import GoalStatus
+from geometry_msgs.msg import Point
+from nav2_msgs.action import DriveOnHeading
+from rclpy.action import ActionClient
+from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 
 from tetra_navigation.mission_manager import MissionManager
@@ -15,6 +20,24 @@ from tetra_navigation.mission_manager import MissionManager
 class MissionManagerProto(MissionManager):
     def __init__(self):
         super().__init__()
+        self.declare_parameter('forward_after_inspection', True)
+        self.declare_parameter('forward_distance', 0.13)
+        self.declare_parameter('forward_speed', 0.03)
+        self.declare_parameter('forward_time_allowance_sec', 10.0)
+
+        self.forward_after_inspection = bool(
+            self.get_parameter('forward_after_inspection').value
+        )
+        self.forward_distance = float(self.get_parameter('forward_distance').value)
+        self.forward_speed = float(self.get_parameter('forward_speed').value)
+        self.forward_time_allowance_sec = float(
+            self.get_parameter('forward_time_allowance_sec').value
+        )
+        self.drive_on_heading_client = ActionClient(
+            self,
+            DriveOnHeading,
+            'drive_on_heading',
+        )
         self.get_logger().info(
             'Mission manager proto mode: front-only inspection, no ST3235/ball screw.'
         )
@@ -45,8 +68,14 @@ class MissionManagerProto(MissionManager):
             self.stop_object_detection()
             return
 
+        pipeline_ok = self.run_inspection_pipeline()
         self.stop_object_detection()
-        self.run_inspection_pipeline()
+
+        if not pipeline_ok:
+            return
+
+        if self.forward_after_inspection:
+            self.drive_forward_after_inspection()
 
     def wait_for_front_capture(self):
         deadline = time.time() + self.object_detection_capture_timeout_sec
@@ -132,6 +161,57 @@ class MissionManagerProto(MissionManager):
 
         self.get_logger().info('Front-only inspection pipeline finished.')
         return True
+
+    def drive_forward_after_inspection(self):
+        self.get_logger().info(
+            'Driving forward after inspection: '
+            f'distance={self.forward_distance:.3f} m, '
+            f'speed={self.forward_speed:.3f} m/s'
+        )
+
+        if not self.drive_on_heading_client.wait_for_server(timeout_sec=10.0):
+            self.get_logger().error('drive_on_heading action server is not available.')
+            return False
+
+        goal = DriveOnHeading.Goal()
+        goal.target = Point(x=self.forward_distance, y=0.0, z=0.0)
+        goal.speed = self.forward_speed
+        goal.time_allowance = Duration(
+            seconds=self.forward_time_allowance_sec
+        ).to_msg()
+
+        self.select_cmd_vel_source('nav')
+        send_future = self.drive_on_heading_client.send_goal_async(goal)
+        while rclpy.ok() and not send_future.done():
+            time.sleep(0.05)
+
+        if not rclpy.ok():
+            self.select_cmd_vel_source('stop')
+            return False
+
+        goal_handle = send_future.result()
+        if not goal_handle.accepted:
+            self.select_cmd_vel_source('stop')
+            self.get_logger().error('drive_on_heading goal was rejected.')
+            return False
+
+        result_future = goal_handle.get_result_async()
+        while rclpy.ok() and not result_future.done():
+            time.sleep(0.05)
+
+        self.select_cmd_vel_source('stop')
+        if not rclpy.ok():
+            return False
+
+        status = result_future.result().status
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('Forward drive after inspection succeeded.')
+            return True
+
+        self.get_logger().error(
+            f'Forward drive after inspection failed: status={status}'
+        )
+        return False
 
 
 def main(args=None):
