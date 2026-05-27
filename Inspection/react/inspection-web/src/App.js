@@ -3,6 +3,19 @@ import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "./firebase";
 import "./App.css";
 
+const getStoredRegularInspectionSchedule = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const savedSchedule = window.localStorage.getItem("regularInspectionSchedule");
+    return savedSchedule ? JSON.parse(savedSchedule) : null;
+  } catch (error) {
+    return null;
+  }
+};
+
 function App() {
   const streamHost = window.location.hostname || "localhost";
   const inspectionStreamBaseUrl = `http://${streamHost}:8000`;
@@ -10,6 +23,7 @@ function App() {
   const hardwareControlBaseUrl = `http://${streamHost}:8002`;
   const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState("home");
+  const [activeMapView, setActiveMapView] = useState("b1f");
   const today = new Date();
   const oneYearAgo = new Date(today);
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -20,8 +34,19 @@ function App() {
   const [filterEndMonth, setFilterEndMonth] = useState(today.getMonth() + 1);
   const [filterEndDay, setFilterEndDay] = useState(today.getDate());
   const [filterExtinguisher, setFilterExtinguisher] = useState("all");
+  const [filterResult, setFilterResult] = useState("all");
   const [appliedFilter, setAppliedFilter] = useState(null);
   const [filterError, setFilterError] = useState("");
+  const [isSchedulePanelOpen, setIsSchedulePanelOpen] = useState(false);
+  const [regularInspectionSchedule, setRegularInspectionSchedule] = useState(
+    () => getStoredRegularInspectionSchedule()
+  );
+  const [scheduleDay, setScheduleDay] = useState(
+    () => getStoredRegularInspectionSchedule()?.day || today.getDate()
+  );
+  const [scheduleTime, setScheduleTime] = useState(
+    () => getStoredRegularInspectionSchedule()?.time || "09:00"
+  );
   const [selectedPhotoRecordId, setSelectedPhotoRecordId] = useState("");
   const [expandedPhoto, setExpandedPhoto] = useState(null);
   const [photoZoom, setPhotoZoom] = useState(1);
@@ -54,6 +79,7 @@ function App() {
     (_, index) => oneYearAgo.getFullYear() + index
   );
   const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1);
+  const scheduleDayOptions = Array.from({ length: 31 }, (_, index) => index + 1);
   const startDayOptions = Array.from(
     { length: new Date(filterStartYear, filterStartMonth, 0).getDate() },
     (_, index) => index + 1
@@ -125,6 +151,17 @@ function App() {
     return item.appearance || "판정불가";
   };
 
+  const saveRegularInspectionSchedule = () => {
+    const schedule = {
+      day: Number(scheduleDay),
+      time: scheduleTime,
+    };
+
+    setRegularInspectionSchedule(schedule);
+    window.localStorage.setItem("regularInspectionSchedule", JSON.stringify(schedule));
+    setIsSchedulePanelOpen(false);
+  };
+
   const filteredRecords = data.filter((item, index) => {
     if (!appliedFilter) {
       return true;
@@ -136,8 +173,12 @@ function App() {
     const itemExtinguisherNumber = match ? Number(match[1]) : (index % 3) + 1;
     const inExtinguisherRange =
       appliedFilter.extinguisher === "all" || itemExtinguisherNumber === Number(appliedFilter.extinguisher);
+    const inResultRange =
+      appliedFilter.result === "all" ||
+      (appliedFilter.result === "pass" && item.result === "pass") ||
+      (appliedFilter.result === "fail" && item.result !== "pass");
 
-    return inDateRange && inExtinguisherRange;
+    return inDateRange && inExtinguisherRange && inResultRange;
   });
 
   const selectedPhotoRecord = filteredRecords.find((item) => item.id === selectedPhotoRecordId);
@@ -497,6 +538,62 @@ function App() {
                   <button className="primary-action" type="button">검사 실행</button>
                 </div>
               </div>
+
+              <div className="command-group schedule-command-group">
+                <div className="command-group-title">정기 검사 예약</div>
+                <div className="schedule-command-body">
+                  <button
+                    className="schedule-toggle-button"
+                    type="button"
+                    onClick={() => setIsSchedulePanelOpen((isOpen) => !isOpen)}
+                  >
+                    정기검사예약
+                  </button>
+                  <div className="schedule-status">
+                    {regularInspectionSchedule
+                      ? `매월 ${regularInspectionSchedule.day}일 ${regularInspectionSchedule.time}`
+                      : "예약 없음"}
+                  </div>
+                  {isSchedulePanelOpen && (
+                    <div className="schedule-controls">
+                      <label>
+                        <span>매월</span>
+                        <select
+                          value={scheduleDay}
+                          onChange={(event) => setScheduleDay(Number(event.target.value))}
+                        >
+                          {scheduleDayOptions.map((day) => (
+                            <option value={day} key={`schedule-day-${day}`}>
+                              {day}일
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>시간</span>
+                        <input
+                          type="time"
+                          value={scheduleTime}
+                          onChange={(event) => setScheduleTime(event.target.value)}
+                        />
+                      </label>
+                      <button
+                        className="schedule-save-button"
+                        type="button"
+                        onClick={saveRegularInspectionSchedule}
+                      >
+                        예약 저장
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button className="emergency-stop-button" type="button">
+                <span>⛔</span>
+                <span>EMERGENCY</span>
+                <span>STOP</span>
+              </button>
             </aside>
           </div>
         );
@@ -704,6 +801,14 @@ function App() {
                     <option value="2">EXT2</option>
                     <option value="3">EXT3</option>
                   </select>
+                  <select
+                    value={filterResult}
+                    onChange={(event) => setFilterResult(event.target.value)}
+                  >
+                    <option value="all">전체 결과</option>
+                    <option value="pass">합격</option>
+                    <option value="fail">불합격</option>
+                  </select>
                   <button
                     className="date-filter-apply"
                     type="button"
@@ -718,6 +823,7 @@ function App() {
                         startDate: filterStartDate,
                         endDate: filterEndDate,
                         extinguisher: filterExtinguisher,
+                        result: filterResult,
                       });
                       setFilterError("");
                       setSelectedPhotoRecordId("");
@@ -810,8 +916,32 @@ function App() {
 
       <div className="content-row">
         <div className="map-section">
-          <h2>B1F 맵</h2>
-          <img src="/B1F.jpg" alt="B1F Map" className="map-image" />
+          <div className="map-button-row">
+            <button
+              className={`map-view-button ${activeMapView === "b1f" ? "active" : ""}`}
+              type="button"
+              onClick={() => setActiveMapView("b1f")}
+            >
+              B1F
+            </button>
+            <button
+              className={`map-view-button ${activeMapView === "live" ? "active" : ""}`}
+              type="button"
+              onClick={() => setActiveMapView("live")}
+            >
+              Live map
+            </button>
+          </div>
+          <div className="map-image-frame">
+            <img src="/B1F.jpg" alt="B1F Map" className="map-image" />
+            {activeMapView === "live" && (
+              <>
+                <span className="map-live-marker marker-ext1">EXT1</span>
+                <span className="map-live-marker marker-ext2">EXT2</span>
+                <span className="map-live-marker marker-ext3">EXT3</span>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="right-section">

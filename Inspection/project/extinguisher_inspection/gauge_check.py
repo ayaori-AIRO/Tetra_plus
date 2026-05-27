@@ -7,11 +7,11 @@ import math
 # 0. 설정 및 로드
 # ================================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SAFE_ANGLE_MIN = 85
-SAFE_ANGLE_MAX = 95
+SAFE_ANGLE_MIN = 60
+SAFE_ANGLE_MAX = 120
 
 gauge_img = cv2.imread(
-    "/home/ltg/ros2_ws/src/tetra/Inspection/capture/inspection/pressure_gauge/camera1_20260524_012222_96.jpg"
+    "/home/ltg/ros2_ws/src/tetra/Inspection/capture/Real_Environment/pressure_gauge/camera1_pressure_gauge_20260507_011409_1.jpg"
 )
 if gauge_img is None:
     print("[gauge_debug] 이미지를 불러올 수 없습니다.")
