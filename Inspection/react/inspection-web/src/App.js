@@ -100,6 +100,9 @@ function App() {
     if (item.pressure === "low") {
       return "낮음";
     }
+    if (item.pressure === "인식 안됨") {
+      return "인식 안됨";
+    }
     return item.pressure || "판정불가";
   };
 
@@ -109,6 +112,9 @@ function App() {
     }
     if (item.appearance === "dirty") {
       return "부식";
+    }
+    if (item.appearance === "인식 안됨") {
+      return "인식 안됨";
     }
     return item.appearance || "판정불가";
   };
@@ -165,6 +171,10 @@ function App() {
     getAppearanceImageUrls(item).forEach((src, index) => {
       photos.push({ label: `부식 ${index + 1}면`, src });
     });
+
+    if (item.full_image) {
+      photos.push({ label: "전체 사진", src: item.full_image });
+    }
 
     return photos;
   };
@@ -299,12 +309,19 @@ function App() {
         }
 
         const health = await response.json();
-        setLiveConnected((prev) => ({
-          ...prev,
-          apriltag: prev.apriltag && Boolean(health.apriltag),
-        }));
+        const apriltagHealthy = Boolean(health.apriltag);
+        setLiveConnected((prev) => {
+          if (apriltagHealthy && !prev.apriltag) {
+            refreshLiveStreams();
+          }
 
-        if (!health.apriltag) {
+          return {
+            ...prev,
+            apriltag: apriltagHealthy,
+          };
+        });
+
+        if (!apriltagHealthy) {
           refreshLiveStreams();
         }
       } catch (error) {

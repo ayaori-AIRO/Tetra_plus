@@ -24,6 +24,7 @@ class MissionManager(Node):
         self.declare_parameter('autostart', False)
         self.declare_parameter('start_docking_after_nav_active', False)
         self.declare_parameter('dock_after_waypoint', True)
+        self.declare_parameter('target_waypoint', 1)
         self.declare_parameter(
             'object_detection_script',
             '/home/ayaori/ros2_ws/src/tetra/Inspection/project/Object_Detection_Live.py',
@@ -53,6 +54,7 @@ class MissionManager(Node):
             self.get_parameter('start_docking_after_nav_active').value
         )
         self.dock_after_waypoint = bool(self.get_parameter('dock_after_waypoint').value)
+        self.target_waypoint = int(self.get_parameter('target_waypoint').value)
         self.object_detection_script = str(
             self.get_parameter('object_detection_script').value
         )
@@ -132,15 +134,34 @@ class MissionManager(Node):
                 self.get_logger().info('Waypoint reached. Docking is disabled.')
 
     def navigate_to_fire_extinguisher(self):
+        waypoints = {
+            1: {
+                'x': 17.651343391534965,
+                'y': 3.061480262290648,
+                'z': 0.9999773599247862,
+                'w': 0.006729014627305277,
+            },
+            2: {
+                'x': 24.339566679100553,
+                'y': 0.0513142952244203,
+                'z': 0.6965519599773928,
+                'w': 0.7175063533179706,
+            },
+        }
+        waypoint = waypoints.get(self.target_waypoint, waypoints[1])
+
         goal_pose = PoseStamped()
         goal_pose.header.frame_id = 'map'
         goal_pose.header.stamp = self.navigator.get_clock().now().to_msg()
-        goal_pose.pose.position.x = 17.651343391534965
-        goal_pose.pose.position.y = 3.061480262290648
-        goal_pose.pose.orientation.z = 0.9999773599247862
-        goal_pose.pose.orientation.w = 0.006729014627305277
+        goal_pose.pose.position.x = waypoint['x']
+        goal_pose.pose.position.y = waypoint['y']
+        goal_pose.pose.orientation.z = waypoint['z']
+        goal_pose.pose.orientation.w = waypoint['w']
 
-        self.get_logger().info('Navigating to fire extinguisher waypoint.')
+        self.get_logger().info(
+            f'Navigating to fire extinguisher waypoint {self.target_waypoint}: '
+            f'x={waypoint["x"]:.3f}, y={waypoint["y"]:.3f}'
+        )
         self.navigator.goToPose(goal_pose)
 
         while not self.navigator.isTaskComplete():
@@ -154,7 +175,9 @@ class MissionManager(Node):
 
         result = self.navigator.getResult()
         if result == TaskResult.SUCCEEDED:
-            self.get_logger().info('Arrived at fire extinguisher waypoint.')
+            self.get_logger().info(
+                f'Arrived at fire extinguisher waypoint {self.target_waypoint}.'
+            )
             return True
 
         if result == TaskResult.CANCELED:

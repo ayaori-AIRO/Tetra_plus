@@ -47,6 +47,15 @@ def latest_image(directory):
     return files[-1] if files else None
 
 
+def latest_image_after(directory, timestamp):
+    files = [
+        path
+        for path in image_files(directory)
+        if path.stat().st_mtime >= timestamp
+    ]
+    return files[-1] if files else None
+
+
 def ensure_result_dirs(result_dir):
     for subdir in ("fire_extinguisher", "pressure_gauge", "label", "full"):
         (result_dir / subdir).mkdir(parents=True, exist_ok=True)
@@ -130,11 +139,22 @@ def run_corrosion_for_image(image_path, output_path):
     }
 
 
-def inspect_corrosion(extinguisher_dir, result_dir, side_count=CORROSION_SIDE_COUNT):
+def inspect_corrosion(
+    extinguisher_dir,
+    result_dir,
+    side_count=CORROSION_SIDE_COUNT,
+    capture_started_at=None,
+):
     fire_images = image_files(extinguisher_dir / "fire_extinguisher")
+    if capture_started_at is not None:
+        fire_images = [
+            image_path
+            for image_path in fire_images
+            if image_path.stat().st_mtime >= capture_started_at
+        ]
     if not fire_images:
         return {
-            "appearance": "부식",
+            "appearance": "인식 안됨",
             "ok": False,
             "message": "fire_extinguisher 이미지 없음",
             "image": "",
@@ -369,6 +389,7 @@ def inspect_extinguisher(
     send_firebase=True,
     corrosion_side_count=CORROSION_SIDE_COUNT,
     run_id=None,
+    capture_started_at=None,
 ):
     capture_dir = CAPTURE_DIR / extinguisher_id
     inspection_time = datetime.now(ZoneInfo("Asia/Seoul"))
@@ -376,25 +397,37 @@ def inspect_extinguisher(
     result_dir = CAPTURE_DIR / f"{extinguisher_id}_inspection" / run_id
     ensure_result_dirs(result_dir)
 
-    corrosion = inspect_corrosion(capture_dir, result_dir, side_count=corrosion_side_count)
+    corrosion = inspect_corrosion(
+        capture_dir,
+        result_dir,
+        side_count=corrosion_side_count,
+        capture_started_at=capture_started_at,
+    )
 
-    gauge_image = latest_image(capture_dir / "pressure_gauge")
+    if capture_started_at is None:
+        gauge_image = latest_image(capture_dir / "pressure_gauge")
+        label_image = latest_image(capture_dir / "label")
+        full_image = latest_image(capture_dir / "full")
+    else:
+        gauge_image = latest_image_after(capture_dir / "pressure_gauge", capture_started_at)
+        label_image = latest_image_after(capture_dir / "label", capture_started_at)
+        full_image = latest_image_after(capture_dir / "full", capture_started_at)
+
     if gauge_image:
         gauge = inspect_gauge(gauge_image, result_dir / "pressure_gauge" / "gauge_result.jpg")
     else:
         gauge = {
-            "pressure": "낮음",
+            "pressure": "인식 안됨",
             "angle": None,
             "decision_source": "NO_IMAGE",
             "image": "",
         }
 
-    label_image = latest_image(capture_dir / "label")
     if label_image:
         label = label_inspector.inspect(label_image, result_dir / "label" / "label_result.jpg")
     else:
         label = {
-            "expiry": "판정불가",
+            "expiry": "인식 안됨",
             "expiry_date": "",
             "text": "",
             "image": "",
@@ -415,6 +448,7 @@ def inspect_extinguisher(
     ]
     appearance_image_url = appearance_side_urls[0] if appearance_side_urls else ""
     expiry_image_url = publish_result_image(label["image"], result_dir)
+    full_image_url = publish_result_image(full_image, result_dir)
     appearance_sides = []
     for side, image_url in zip(corrosion.get("sides", []), appearance_side_urls):
         appearance_sides.append({
@@ -439,6 +473,8 @@ def inspect_extinguisher(
         "appearance_images": appearance_side_urls,
         "appearance_sides": appearance_sides,
         "expiry_image": expiry_image_url,
+        "full_image": full_image_url,
+        "capture_complete": bool(corrosion["ok"] and gauge_image and label_image),
     }
 
     (result_dir / "inspection_result.json").write_text(
@@ -462,6 +498,12 @@ def parse_args():
         help="Inspection result folder name. Defaults to current Korea timestamp.",
     )
     parser.add_argument(
+        "--capture-started-at",
+        type=float,
+        default=None,
+        help="Only use capture images saved at or after this Unix timestamp.",
+    )
+    parser.add_argument(
         "--corrosion-side-count",
         type=int,
         default=CORROSION_SIDE_COUNT,
@@ -482,6 +524,7 @@ def main():
             send_firebase=not args.no_firebase,
             corrosion_side_count=args.corrosion_side_count,
             run_id=run_id,
+            capture_started_at=args.capture_started_at,
         )
         results.append(result)
         print(json.dumps(result, ensure_ascii=False), flush=True)

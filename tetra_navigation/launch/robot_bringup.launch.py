@@ -37,6 +37,7 @@ def generate_launch_description():
     mission_autostart = LaunchConfiguration('mission_autostart')
     start_docking_after_nav_active = LaunchConfiguration('start_docking_after_nav_active')
     dock_after_waypoint = LaunchConfiguration('dock_after_waypoint')
+    target_waypoint = LaunchConfiguration('target_waypoint')
     servo_enabled = LaunchConfiguration('servo_enabled')
 
     tags_config = os.path.join(
@@ -168,6 +169,7 @@ def generate_launch_description():
             'autostart': mission_autostart,
             'start_docking_after_nav_active': start_docking_after_nav_active,
             'dock_after_waypoint': dock_after_waypoint,
+            'target_waypoint': target_waypoint,
             'object_detection_script': object_detection_script,
             'neopixel_controller_script': neopixel_controller_script,
             'motor_controller_script': motor_controller_script,
@@ -349,6 +351,11 @@ def generate_launch_description():
             'dock_after_waypoint',
             default_value='true',
             description='Start dock_to_tag after the fire extinguisher waypoint is reached.'
+        ),
+        DeclareLaunchArgument(
+            'target_waypoint',
+            default_value='1',
+            description='Fire extinguisher waypoint number to navigate to.'
         ),
         DeclareLaunchArgument(
             'servo_enabled',
