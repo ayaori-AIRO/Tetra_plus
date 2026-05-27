@@ -31,8 +31,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'waypoint2_backup_distance',
-            default_value='0.35',
+            default_value='0.6',
             description='Drive distance in meters after waypoint 2 navigation arrives.',
+        ),
+        DeclareLaunchArgument(
+            'waypoint2_backup_speed',
+            default_value='0.06',
+            description='Drive speed in m/s after waypoint 2 navigation arrives.',
         ),
         DeclareLaunchArgument(
             'waypoint2_forward_after_inspection_distance',
@@ -71,7 +76,8 @@ def generate_launch_description():
                 'target_waypoint': LaunchConfiguration('target_waypoint', default='1'),
                 'inspection_waypoints': LaunchConfiguration('inspection_waypoints', default='[1, 2]'),
                 'waypoint2_backup_after_arrival': LaunchConfiguration('waypoint2_backup_after_arrival', default='true'),
-                'waypoint2_backup_distance': LaunchConfiguration('waypoint2_backup_distance', default='0.35'),
+                'waypoint2_backup_distance': LaunchConfiguration('waypoint2_backup_distance', default='0.6'),
+                'waypoint2_backup_speed': LaunchConfiguration('waypoint2_backup_speed', default='0.06'),
                 'waypoint2_forward_after_inspection_distance': LaunchConfiguration('waypoint2_forward_after_inspection_distance', default='0.5'),
                 'waypoint2_forward_after_inspection_speed': LaunchConfiguration('waypoint2_forward_after_inspection_speed', default='0.10'),
             }.items(),

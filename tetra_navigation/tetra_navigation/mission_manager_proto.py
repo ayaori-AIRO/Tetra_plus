@@ -28,7 +28,8 @@ class MissionManagerProto(MissionManager):
         self.declare_parameter('forward_speed', 0.03)
         self.declare_parameter('forward_time_allowance_sec', 10.0)
         self.declare_parameter('waypoint2_backup_after_arrival', True)
-        self.declare_parameter('waypoint2_backup_distance', 0.35)
+        self.declare_parameter('waypoint2_backup_distance', 0.6)
+        self.declare_parameter('waypoint2_backup_speed', 0.06)
         self.declare_parameter('waypoint2_forward_after_inspection_distance', 0.5)
         self.declare_parameter('waypoint2_forward_after_inspection_speed', 0.10)
 
@@ -48,6 +49,9 @@ class MissionManagerProto(MissionManager):
         )
         self.waypoint2_backup_distance = float(
             self.get_parameter('waypoint2_backup_distance').value
+        )
+        self.waypoint2_backup_speed = float(
+            self.get_parameter('waypoint2_backup_speed').value
         )
         self.waypoint2_forward_after_inspection_distance = float(
             self.get_parameter('waypoint2_forward_after_inspection_distance').value
@@ -97,7 +101,7 @@ class MissionManagerProto(MissionManager):
             if waypoint_id == 2 and self.waypoint2_backup_after_arrival:
                 if not self.drive_on_heading(
                     self.waypoint2_backup_distance,
-                    self.forward_speed,
+                    self.waypoint2_backup_speed,
                     'waypoint 2 backup after arrival',
                 ):
                     self.get_logger().warn(

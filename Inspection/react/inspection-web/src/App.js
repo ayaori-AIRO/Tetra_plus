@@ -7,6 +7,7 @@ function App() {
   const streamHost = window.location.hostname || "localhost";
   const inspectionStreamBaseUrl = `http://${streamHost}:8000`;
   const apriltagStreamBaseUrl = `http://${streamHost}:8001`;
+  const hardwareControlBaseUrl = `http://${streamHost}:8002`;
   const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState("home");
   const today = new Date();
@@ -27,6 +28,10 @@ function App() {
   const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
   const [photoDrag, setPhotoDrag] = useState(null);
   const [streamRetryKey, setStreamRetryKey] = useState(Date.now());
+  const [neopixelValues, setNeopixelValues] = useState({
+    internal: 0,
+    external: 0,
+  });
   const [liveConnected, setLiveConnected] = useState({
     apriltag: false,
     camera1: false,
@@ -34,6 +39,7 @@ function App() {
   });
   const photoModalRef = useRef(null);
   const streamRetryTimerRef = useRef(null);
+  const neopixelTimersRef = useRef({});
   const extinguisherNames = [
     "EXT1 (B1F 복도 A)",
     "EXT2 B1F 복도B",
@@ -222,6 +228,70 @@ function App() {
     }, 300);
   };
 
+  const setNeopixelBrightness = (target, value) => {
+    const brightness = Math.max(0, Math.min(255, Number(value)));
+    setNeopixelValues((prev) => ({
+      ...prev,
+      [target]: brightness,
+    }));
+
+    if (neopixelTimersRef.current[target]) {
+      clearTimeout(neopixelTimersRef.current[target]);
+    }
+
+    neopixelTimersRef.current[target] = setTimeout(async () => {
+      neopixelTimersRef.current[target] = null;
+      try {
+        await fetch(`${hardwareControlBaseUrl}/neopixel`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            target,
+            value: brightness,
+          }),
+        });
+      } catch (error) {
+        console.error("NeoPixel brightness update failed:", error);
+      }
+    }, 250);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadNeopixelState = async () => {
+      try {
+        const response = await fetch(`${hardwareControlBaseUrl}/neopixel/state`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("NeoPixel state request failed");
+        }
+
+        const payload = await response.json();
+        if (isMounted && payload.state) {
+          setNeopixelValues({
+            internal: Number(payload.state.internal || 0),
+            external: Number(payload.state.external || 0),
+          });
+        }
+      } catch (error) {
+        console.error("NeoPixel state load failed:", error);
+      }
+    };
+
+    loadNeopixelState();
+    const intervalId = setInterval(loadNeopixelState, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [hardwareControlBaseUrl]);
+
   useEffect(() => {
     const q = query(
       collection(db, "inspection"),
@@ -254,10 +324,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const neopixelTimers = neopixelTimersRef.current;
     return () => {
       if (streamRetryTimerRef.current) {
         clearTimeout(streamRetryTimerRef.current);
       }
+      Object.values(neopixelTimers).forEach((timerId) => {
+        if (timerId) {
+          clearTimeout(timerId);
+        }
+      });
     };
   }, []);
 
@@ -498,11 +574,31 @@ function App() {
               </div>
               <div className="hardware-status-card">
                 <span>LED(소화기 내부)</span>
-                <input className="neopixel-slider" type="range" min="0" max="100" defaultValue="0" />
+                <div className="neopixel-control">
+                  <input
+                    className="neopixel-slider"
+                    type="range"
+                    min="0"
+                    max="255"
+                    value={neopixelValues.internal}
+                    onChange={(event) => setNeopixelBrightness("internal", event.target.value)}
+                  />
+                  <span>{neopixelValues.internal}</span>
+                </div>
               </div>
               <div className="hardware-status-card">
                 <span>LED(소화기 외부)</span>
-                <input className="neopixel-slider" type="range" min="0" max="100" defaultValue="0" />
+                <div className="neopixel-control">
+                  <input
+                    className="neopixel-slider"
+                    type="range"
+                    min="0"
+                    max="255"
+                    value={neopixelValues.external}
+                    onChange={(event) => setNeopixelBrightness("external", event.target.value)}
+                  />
+                  <span>{neopixelValues.external}</span>
+                </div>
               </div>
             </div>
           </div>

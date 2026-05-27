@@ -24,6 +24,7 @@ def generate_launch_description():
     use_object_detection = LaunchConfiguration('use_object_detection')
     object_detection_script = LaunchConfiguration('object_detection_script')
     neopixel_controller_script = LaunchConfiguration('neopixel_controller_script')
+    neopixel_api_port = LaunchConfiguration('neopixel_api_port')
     motor_controller_script = LaunchConfiguration('motor_controller_script')
     inspection_pipeline_script = LaunchConfiguration('inspection_pipeline_script')
     object_detection_start_delay = LaunchConfiguration('object_detection_start_delay')
@@ -229,6 +230,18 @@ def generate_launch_description():
         ],
     )
 
+    neopixel_api_server = ExecuteProcess(
+        cmd=[
+            'python3',
+            '-u',
+            neopixel_controller_script,
+            'server',
+            '--api-port',
+            neopixel_api_port,
+        ],
+        output='screen',
+    )
+
     robot_nodes = TimerAction(
         period=react_start_delay,
         actions=[
@@ -241,6 +254,7 @@ def generate_launch_description():
             apriltag_visualizer,
             apriltag_stream_server,
             apriltag_servo,
+            neopixel_api_server,
             mission_manager,
             rviz,
         ],
@@ -286,6 +300,11 @@ def generate_launch_description():
             'neopixel_controller_script',
             default_value='/home/ayaori/ros2_ws/src/tetra/Inspection/project/neopixel_controller.py',
             description='Path to the NeoPixel controller script.'
+        ),
+        DeclareLaunchArgument(
+            'neopixel_api_port',
+            default_value='8002',
+            description='HTTP API port for NeoPixel hardware controls.'
         ),
         DeclareLaunchArgument(
             'motor_controller_script',

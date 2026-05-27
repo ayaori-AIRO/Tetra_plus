@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
+import time
+
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from rclpy.signals import SignalHandlerOptions
 from std_msgs.msg import String
 
 
@@ -29,7 +32,7 @@ class CmdVelMux(Node):
             return
 
         self.source = requested
-        self.cmd_pub.publish(Twist())
+        self.publish_stop(repeats=1, interval=0.0)
         self.get_logger().info(f'cmd_vel_mux selected source={self.source}')
 
     def nav_callback(self, msg):
@@ -42,14 +45,27 @@ class CmdVelMux(Node):
         if self.source == 'servo':
             self.cmd_pub.publish(msg)
 
+    def publish_stop(self, repeats=3, interval=0.05):
+        stop_cmd = Twist()
+        for _ in range(repeats):
+            self.cmd_pub.publish(stop_cmd)
+            if interval > 0.0:
+                time.sleep(interval)
+
 
 def main(args=None):
-    rclpy.init(args=args)
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = CmdVelMux()
     try:
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     finally:
-        node.cmd_pub.publish(Twist())
+        if rclpy.ok():
+            try:
+                node.publish_stop(repeats=5, interval=0.05)
+            except Exception as exc:
+                node.get_logger().error(f'Failed to publish stop command during shutdown: {exc}')
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
