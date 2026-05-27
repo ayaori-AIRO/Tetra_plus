@@ -18,13 +18,43 @@ ONNX_MODEL_DIR = INSPECTION_DIR / "onnx_models"
 
 
 def normalize_ocr_text(text):
-    return re.sub(r"\s+", "", text)
+    text = re.sub(r"\s+", "", text)
+    return text.translate(str.maketrans({
+        "O": "0",
+        "o": "0",
+        "〇": "0",
+        "○": "0",
+        "０": "0",
+        "１": "1",
+        "２": "2",
+        "３": "3",
+        "４": "4",
+        "５": "5",
+        "６": "6",
+        "７": "7",
+        "８": "8",
+        "９": "9",
+    }))
 
 
 def extract_expiry(text):
     text = normalize_ocr_text(text)
+    reverse_patterns = [
+        r"년(\d{1,2})\D{0,20}(20\d{2})",
+    ]
+    for pattern in reverse_patterns:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        month, year = match.groups()
+        month = int(month)
+        if 1 <= month <= 12:
+            return f"{int(year):04d}-{month:02d}"
+
     patterns = [
         r"(20\d{2})년(\d{1,2})월",
+        r"(20\d{2})년(\d{1,2})(?!\d)",
+        r"(20\d{2})년\D{0,6}(\d{1,2})(?!\d)",
         r"(20\d{2})[./-](\d{1,2})",
         r"(20\d{2})(0[1-9]|1[0-2])",
     ]

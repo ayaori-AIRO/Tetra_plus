@@ -11,8 +11,12 @@ import serial
 
 
 DEFAULT_PORT = "/dev/tetra/neopixel"
+ST3235_BALLSCREW_PORT = "/dev/tetra/st3235_ballscrew"
+TETRA_MOTOR_PORT = "/dev/tetra/motor"
+LIDAR_PORT = "/dev/tetra/lidar"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_PATH = os.path.join(BASE_DIR, "config", "neopixel_state.json")
+INSPECTION_STATUS_PATH = os.path.join(BASE_DIR, "config", "inspection_status.json")
 BAUDRATE = 9600
 COMMANDS = {
     "internal": "INTERNAL",
@@ -96,6 +100,32 @@ def load_state():
     }
 
 
+def load_inspection_status():
+    try:
+        with open(INSPECTION_STATUS_PATH, "r", encoding="utf-8") as state_file:
+            status = json.load(state_file)
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {"running": False, "updated_at": 0}
+
+    return {
+        "running": bool(status.get("running")),
+        "updated_at": status.get("updated_at", 0),
+        "action": status.get("action", ""),
+        "logs": status.get("logs", []),
+    }
+
+
+def get_hardware_status():
+    st3235_ballscrew_connected = os.path.exists(ST3235_BALLSCREW_PORT)
+    return {
+        "ballscrew": st3235_ballscrew_connected,
+        "st3235": st3235_ballscrew_connected,
+        "neopixel": os.path.exists(DEFAULT_PORT),
+        "tetra_motor": os.path.exists(TETRA_MOTOR_PORT),
+        "lidar": os.path.exists(LIDAR_PORT),
+    }
+
+
 def save_state(state):
     safe_state = {
         normalize_target(target): clamp_color_value(value)
@@ -159,10 +189,14 @@ class NeoPixelApiServer:
 
                 if path == "/neopixel/state":
                     state = load_state()
+                    inspection_status = load_inspection_status()
                     self.send_json(
                         200,
                         {
                             "ok": True,
+                            "inspection": inspection_status,
+                            "led_locked": bool(inspection_status.get("running")),
+                            "hardware": get_hardware_status(),
                             "state": {
                                 "internal": state.get("internal", 0),
                                 "external": state.get("camera", 0),
@@ -197,6 +231,16 @@ class NeoPixelApiServer:
                 self.handle_set_neopixel(payload.get("target"), payload.get("value"))
 
             def handle_set_neopixel(self, target, value):
+                if load_inspection_status().get("running"):
+                    self.send_json(
+                        423,
+                        {
+                            "ok": False,
+                            "error": "inspection running; LED control locked",
+                        },
+                    )
+                    return
+
                 try:
                     target = normalize_target(target)
                     value = clamp_color_value(value)

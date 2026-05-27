@@ -1,0 +1,17 @@
+{
+  "extinguisher_id": "id3",
+  "pressure": "정상",
+  "appearance": "인식 안됨",
+  "expiry": "판정불가",
+  "expiry_date": "",
+  "result": "fail",
+  "time": "2026-05-28T02:58:07+09:00",
+  "run_id": "20260528_025807",
+  "pressure_image": "/inspection-results/id3_inspection/20260528_025807/pressure_gauge/gauge_result.jpg",
+  "appearance_image": "",
+  "appearance_images": [],
+  "appearance_sides": [],
+  "expiry_image": "/inspection-results/id3_inspection/20260528_025807/label/label_result.jpg",
+  "full_image": "/inspection-results/id3/full/fallback_camera1_top_camera2_bottom_20260528_025806.jpg",
+  "capture_complete": false
+}

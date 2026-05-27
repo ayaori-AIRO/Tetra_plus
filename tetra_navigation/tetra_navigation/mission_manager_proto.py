@@ -8,11 +8,8 @@ import urllib.error
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import Point, PoseStamped, Twist
-from nav2_msgs.action import DriveOnHeading
+from geometry_msgs.msg import PoseStamped, Twist
 from nav2_simple_commander.robot_navigator import TaskResult
-from rclpy.action import ActionClient
-from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from tetra_msgs.action import DockToTag
 
@@ -22,7 +19,7 @@ from tetra_navigation.mission_manager import MissionManager
 class MissionManagerProto(MissionManager):
     def __init__(self):
         super().__init__()
-        self.declare_parameter('inspection_waypoints', [1, 2])
+        self.declare_parameter('inspection_waypoints', [1, 2, 3])
         self.declare_parameter('forward_after_inspection', True)
         self.declare_parameter('forward_distance', 0.13)
         self.declare_parameter('forward_speed', 0.03)
@@ -32,6 +29,11 @@ class MissionManagerProto(MissionManager):
         self.declare_parameter('waypoint2_backup_speed', 0.06)
         self.declare_parameter('waypoint2_forward_after_inspection_distance', 0.5)
         self.declare_parameter('waypoint2_forward_after_inspection_speed', 0.10)
+        self.declare_parameter('return_home_after_mission', True)
+        self.declare_parameter('home_x', 0.0)
+        self.declare_parameter('home_y', 0.0)
+        self.declare_parameter('home_z', 0.0)
+        self.declare_parameter('home_w', 1.0)
 
         self.inspection_waypoints = self.parse_waypoint_sequence(
             self.get_parameter('inspection_waypoints').value
@@ -59,13 +61,16 @@ class MissionManagerProto(MissionManager):
         self.waypoint2_forward_after_inspection_speed = float(
             self.get_parameter('waypoint2_forward_after_inspection_speed').value
         )
-        self.drive_on_heading_client = ActionClient(
-            self,
-            DriveOnHeading,
-            'drive_on_heading',
+        self.return_home_after_mission = bool(
+            self.get_parameter('return_home_after_mission').value
         )
-        self.nav_cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.cmd_vel_out_pub = self.create_publisher(Twist, '/cmd_vel_out', 10)
+        self.home_waypoint = {
+            'x': float(self.get_parameter('home_x').value),
+            'y': float(self.get_parameter('home_y').value),
+            'z': float(self.get_parameter('home_z').value),
+            'w': float(self.get_parameter('home_w').value),
+        }
+        self.cmd_vel_direct_pub = self.create_publisher(Twist, '/cmd_vel_direct', 10)
         self.get_logger().info(
             'Mission manager proto mode: front-only inspection, no ST3235/ball screw.'
         )
@@ -74,63 +79,95 @@ class MissionManagerProto(MissionManager):
         )
 
     def run_mission(self):
+        self.set_mission_action('Nav2 활성화 대기')
         self.get_logger().info('Waiting for Nav2 to become active...')
         self.navigator.waitUntilNav2Active()
         self.get_logger().info('Nav2 is active. Proto mission sequence can continue.')
+        self.set_mission_action('Nav2 준비 완료')
         self.select_cmd_vel_source('nav')
+        self.set_inspection_running(True, '검사 시작')
 
-        if self.start_docking_after_nav_active:
-            if self.dock_to_tag_sync(self.target_waypoint):
-                self.run_inspection_sequence()
-            return
-
-        for index, waypoint_id in enumerate(self.inspection_waypoints):
-            if not rclpy.ok():
+        try:
+            if self.start_docking_after_nav_active:
+                self.set_mission_action(f'EXT{self.target_waypoint} 비주얼 서보잉 시작')
+                if self.dock_to_tag_sync(self.target_waypoint):
+                    self.run_inspection_sequence()
                 return
 
-            self.target_waypoint = waypoint_id
-            self.get_logger().info(
-                f'Starting extinguisher {waypoint_id} inspection '
-                f'({index + 1}/{len(self.inspection_waypoints)}).'
-            )
+            for index, waypoint_id in enumerate(self.inspection_waypoints):
+                if not rclpy.ok():
+                    return
 
-            if not self.navigate_to_fire_extinguisher():
-                self.get_logger().error(
-                    f'Aborting proto mission: waypoint {waypoint_id} navigation failed.'
+                self.target_waypoint = waypoint_id
+                self.get_logger().info(
+                    f'Starting extinguisher {waypoint_id} inspection '
+                    f'({index + 1}/{len(self.inspection_waypoints)}).'
                 )
-                return
+                self.set_mission_action(f'EXT{waypoint_id} 이동 시작')
 
-            if waypoint_id == 2 and self.waypoint2_backup_after_arrival:
-                if not self.drive_on_heading(
-                    self.waypoint2_backup_distance,
-                    self.waypoint2_backup_speed,
-                    'waypoint 2 backup after arrival',
-                ):
-                    self.get_logger().warn(
-                        'Waypoint 2 backup after arrival did not succeed. '
-                        'Continuing to visual servoing.'
+                if not self.navigate_to_fire_extinguisher():
+                    self.get_logger().error(
+                        f'Aborting proto mission: waypoint {waypoint_id} navigation failed.'
                     )
+                    self.set_mission_action(f'EXT{waypoint_id} 이동 실패')
+                    return
+                self.set_mission_action(f'EXT{waypoint_id} 도착')
 
-            if not self.dock_after_waypoint:
-                self.get_logger().info('Waypoint reached. Docking is disabled.')
-                continue
+                if waypoint_id in (2, 3) and self.waypoint2_backup_after_arrival:
+                    self.set_mission_action(f'EXT{waypoint_id} 충돌 방지 전진')
+                    if not self.drive_fixed_distance(
+                        self.waypoint2_backup_distance,
+                        self.waypoint2_backup_speed,
+                        f'waypoint {waypoint_id} backup after arrival',
+                    ):
+                        self.get_logger().warn(
+                            f'Waypoint {waypoint_id} backup after arrival did not succeed. '
+                            'Continuing to visual servoing.'
+                        )
 
-            time.sleep(1.0)
-            if not self.dock_to_tag_sync(waypoint_id):
-                self.get_logger().error(
-                    f'Aborting proto mission: waypoint {waypoint_id} visual servoing failed.'
-                )
-                return
+                if not self.dock_after_waypoint:
+                    self.get_logger().info('Waypoint reached. Docking is disabled.')
+                    continue
 
-            if not self.run_inspection_sequence():
-                self.get_logger().error(
-                    f'Aborting proto mission: extinguisher {waypoint_id} inspection failed.'
-                )
-                return
+                time.sleep(1.0)
+                self.set_mission_action(f'EXT{waypoint_id} 비주얼 서보잉 시작')
+                if not self.dock_to_tag_sync(waypoint_id):
+                    self.get_logger().error(
+                        f'Aborting proto mission: waypoint {waypoint_id} visual servoing failed.'
+                    )
+                    self.set_mission_action(f'EXT{waypoint_id} 비주얼 서보잉 실패')
+                    return
+                self.set_mission_action(f'EXT{waypoint_id} 비주얼 서보잉 완료')
 
-            self.select_cmd_vel_source('nav')
+                if not self.run_inspection_sequence():
+                    self.get_logger().error(
+                        f'Aborting proto mission: extinguisher {waypoint_id} inspection failed.'
+                    )
+                    self.set_mission_action(f'EXT{waypoint_id} 검사 실패')
+                    return
 
-        self.get_logger().info('Proto mission sequence finished.')
+                self.select_cmd_vel_source('nav')
+
+            if self.return_home_after_mission:
+                self.return_home()
+
+            self.set_mission_action('작업 완료')
+            self.get_logger().info('Proto mission sequence finished.')
+        finally:
+            self.set_inspection_running(False, '검사 종료')
+
+    def return_home(self):
+        self.get_logger().info('All inspections complete. Returning to home pose.')
+        self.set_mission_action('홈 위치 복귀 시작')
+        self.select_cmd_vel_source('nav')
+        if self.navigate_to_pose(self.home_waypoint, 'home'):
+            self.get_logger().info('Arrived at home pose. Proto mission complete.')
+            self.set_mission_action('홈 위치 복귀 완료')
+            return True
+
+        self.get_logger().error('Failed to return to home pose.')
+        self.set_mission_action('홈 위치 복귀 실패')
+        return False
 
     def navigate_to_fire_extinguisher(self):
         if self.target_waypoint == 2:
@@ -155,6 +192,18 @@ class MissionManagerProto(MissionManager):
             return self.navigate_to_pose(
                 final_waypoint,
                 'fire extinguisher waypoint 2 final',
+            )
+
+        if self.target_waypoint == 3:
+            final_waypoint = {
+                'x': 40.68936856521227,
+                'y': 0.2179757647171073,
+                'z': -0.7100444040265033,
+                'w': 0.704156903190367,
+            }
+            return self.navigate_to_pose(
+                final_waypoint,
+                'fire extinguisher waypoint 3 final',
             )
 
         return super().navigate_to_fire_extinguisher()
@@ -287,12 +336,24 @@ class MissionManagerProto(MissionManager):
         return [int(value)]
 
     def run_inspection_sequence(self):
+        was_running = bool(self.read_inspection_status().get('running'))
+        if not was_running:
+            self.set_inspection_running(True, '검사 시작')
+        try:
+            return self._run_inspection_sequence()
+        finally:
+            if not was_running:
+                self.set_inspection_running(False, '검사 종료')
+
+    def _run_inspection_sequence(self):
+        self.set_mission_action(f'EXT{self.target_waypoint} LED 켜는 중')
         self.turn_on_internal_led()
 
         if not self.start_object_detection():
             self.turn_off_neopixel()
             return False
 
+        self.set_mission_action(f'EXT{self.target_waypoint} 검사 카메라 준비')
         if not self.wait_for_object_detection_ready():
             self.stop_inspection_live()
             return False
@@ -305,6 +366,7 @@ class MissionManagerProto(MissionManager):
             self.stop_inspection_live()
             return False
 
+        self.set_mission_action(f'EXT{self.target_waypoint} 촬영 대기')
         if not self.reset_object_detection_capture(1):
             self.stop_inspection_live()
             return False
@@ -312,6 +374,7 @@ class MissionManagerProto(MissionManager):
         self.capture_started_at = time.time()
         self.wait_for_front_capture()
 
+        self.set_mission_action(f'EXT{self.target_waypoint} 검사 분석 중')
         pipeline_ok = self.run_inspection_pipeline()
         self.stop_inspection_live()
 
@@ -322,12 +385,13 @@ class MissionManagerProto(MissionManager):
             distance = self.forward_distance
             speed = self.forward_speed
             label = 'forward drive after inspection'
-            if self.target_waypoint == 2:
+            if self.target_waypoint in (2, 3):
                 distance = self.waypoint2_forward_after_inspection_distance
                 speed = self.waypoint2_forward_after_inspection_speed
-                label = 'waypoint 2 forward drive after inspection'
+                label = f'waypoint {self.target_waypoint} forward drive after inspection'
 
-            if not self.drive_on_heading(
+            self.set_mission_action(f'EXT{self.target_waypoint} 도킹 해제 전진')
+            if not self.drive_fixed_distance(
                 distance,
                 speed,
                 label,
@@ -466,99 +530,39 @@ class MissionManagerProto(MissionManager):
         self.get_logger().info('Front-only inspection pipeline finished.')
         return True
 
-    def drive_on_heading(self, distance, speed, label):
+    def drive_fixed_distance(self, distance, speed, label):
         if speed == 0.0:
             self.get_logger().error(f'{label} speed must not be zero.')
             return False
 
-        minimum_time_allowance_sec = (
-            abs(distance) / max(abs(speed), 0.001)
-        ) + 5.0
-        effective_time_allowance_sec = max(
-            self.forward_time_allowance_sec,
-            minimum_time_allowance_sec,
-        )
+        drive_duration_sec = abs(distance) / max(abs(speed), 0.001)
+        linear_x = abs(speed) if distance >= 0.0 else -abs(speed)
 
         self.get_logger().info(
-            f'Driving on heading for {label}: '
+            f'Driving directly for {label}: '
             f'distance={distance:.3f} m, '
-            f'speed={speed:.3f} m/s, '
-            f'time_allowance={effective_time_allowance_sec:.1f} s'
+            f'linear.x={linear_x:.3f} m/s, '
+            f'duration={drive_duration_sec:.1f} s'
         )
 
-        if not self.drive_on_heading_client.wait_for_server(timeout_sec=10.0):
-            self.get_logger().error('drive_on_heading action server is not available.')
-            return False
+        self.select_cmd_vel_source('direct')
+        cmd = Twist()
+        cmd.linear.x = linear_x
+        deadline = time.monotonic() + drive_duration_sec
 
-        goal = DriveOnHeading.Goal()
-        goal.target = Point(x=distance, y=0.0, z=0.0)
-        goal.speed = speed
-        goal.time_allowance = Duration(
-            seconds=effective_time_allowance_sec
-        ).to_msg()
-
-        self.select_cmd_vel_source('nav')
-        send_future = self.drive_on_heading_client.send_goal_async(goal)
-        while rclpy.ok() and not send_future.done():
+        while rclpy.ok() and time.monotonic() < deadline:
+            self.cmd_vel_direct_pub.publish(cmd)
             time.sleep(0.05)
-
-        if not rclpy.ok():
-            self.select_cmd_vel_source('stop')
-            return False
-
-        goal_handle = send_future.result()
-        if not goal_handle.accepted:
-            self.select_cmd_vel_source('stop')
-            self.get_logger().error(f'{label} drive_on_heading goal was rejected.')
-            return False
-
-        result_future = goal_handle.get_result_async()
-        expected_drive_sec = abs(distance) / max(abs(speed), 0.001)
-        hard_stop_deadline = time.monotonic() + expected_drive_sec + 0.75
-        while (
-            rclpy.ok()
-            and not result_future.done()
-            and time.monotonic() < hard_stop_deadline
-        ):
-            time.sleep(0.05)
-
-        if not result_future.done():
-            self.get_logger().warn(
-                f'{label} exceeded expected drive time '
-                f'({expected_drive_sec:.1f}s). Canceling and forcing stop.'
-            )
-            cancel_future = goal_handle.cancel_goal_async()
-            cancel_deadline = time.monotonic() + 1.0
-            while rclpy.ok() and not cancel_future.done() and time.monotonic() < cancel_deadline:
-                time.sleep(0.05)
-            self.force_stop_motion()
-            return False
 
         self.force_stop_motion()
-        if not rclpy.ok():
-            return False
-
-        action_result = result_future.result()
-        status = action_result.status
-        if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info(f'{label} succeeded.')
-            return True
-
-        result = action_result.result
-        self.get_logger().error(
-            f'{label} failed: '
-            f'status={status}, '
-            f'error_code={getattr(result, "error_code", "n/a")}, '
-            f'error_msg={getattr(result, "error_msg", "n/a")}'
-        )
-        return False
+        self.get_logger().info(f'{label} direct drive finished.')
+        return rclpy.ok()
 
     def force_stop_motion(self):
         self.select_cmd_vel_source('stop')
         stop_cmd = Twist()
-        for _ in range(5):
-            self.nav_cmd_pub.publish(stop_cmd)
-            self.cmd_vel_out_pub.publish(stop_cmd)
+        for _ in range(10):
+            self.cmd_vel_direct_pub.publish(stop_cmd)
             time.sleep(0.05)
 
 

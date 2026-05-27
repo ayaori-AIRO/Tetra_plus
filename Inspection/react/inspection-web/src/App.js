@@ -21,6 +21,7 @@ function App() {
   const inspectionStreamBaseUrl = `http://${streamHost}:8000`;
   const apriltagStreamBaseUrl = `http://${streamHost}:8001`;
   const hardwareControlBaseUrl = `http://${streamHost}:8002`;
+  const robotPoseBaseUrl = `http://${streamHost}:8003`;
   const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState("home");
   const [activeMapView, setActiveMapView] = useState("b1f");
@@ -48,6 +49,7 @@ function App() {
     () => getStoredRegularInspectionSchedule()?.time || "09:00"
   );
   const [selectedPhotoRecordId, setSelectedPhotoRecordId] = useState("");
+  const [selectedPhotoRecordSnapshot, setSelectedPhotoRecordSnapshot] = useState(null);
   const [expandedPhoto, setExpandedPhoto] = useState(null);
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
@@ -57,11 +59,24 @@ function App() {
     internal: 0,
     external: 0,
   });
+  const [hardwareConnected, setHardwareConnected] = useState({
+    ballscrew: false,
+    st3235: false,
+    neopixel: false,
+    tetraMotor: false,
+    lidar: false,
+  });
+  const [inspectionRunning, setInspectionRunning] = useState(false);
+  const [missionLogs, setMissionLogs] = useState([]);
+  const [emergencyStopActive, setEmergencyStopActive] = useState(false);
   const [liveConnected, setLiveConnected] = useState({
     apriltag: false,
     camera1: false,
     camera2: false,
   });
+  const [robotPose, setRobotPose] = useState(null);
+  const [liveMapLoaded, setLiveMapLoaded] = useState(false);
+  const [liveMapRetryKey, setLiveMapRetryKey] = useState(Date.now());
   const photoModalRef = useRef(null);
   const streamRetryTimerRef = useRef(null);
   const neopixelTimersRef = useRef({});
@@ -181,7 +196,9 @@ function App() {
     return inDateRange && inExtinguisherRange && inResultRange;
   });
 
-  const selectedPhotoRecord = filteredRecords.find((item) => item.id === selectedPhotoRecordId);
+  const selectedPhotoRecord =
+    filteredRecords.find((item) => item.id === selectedPhotoRecordId) ||
+    (selectedPhotoRecordSnapshot?.id === selectedPhotoRecordId ? selectedPhotoRecordSnapshot : null);
   const dateFilterMessage = isFilterDateRangeInvalid
     ? "시작일은 종료일보다 늦을 수 없습니다."
     : filterError;
@@ -202,6 +219,18 @@ function App() {
     return item.appearance_image ? [item.appearance_image] : [];
   };
 
+  const resolveInspectionImageUrl = (src) => {
+    if (!src) {
+      return "";
+    }
+
+    if (/^(https?:)?\/\//i.test(src) || src.startsWith("data:") || src.startsWith("blob:")) {
+      return src;
+    }
+
+    return src.startsWith("/") ? src : `/${src}`;
+  };
+
   const getInspectionPhotoItems = (item) => {
     if (!item) {
       return [];
@@ -209,21 +238,26 @@ function App() {
 
     const photos = [];
     if (item.pressure_image) {
-      photos.push({ label: "압력 게이지", src: item.pressure_image });
+      photos.push({ label: "압력 게이지", src: resolveInspectionImageUrl(item.pressure_image) });
     }
     if (item.expiry_image) {
-      photos.push({ label: "라벨", src: item.expiry_image });
+      photos.push({ label: "라벨", src: resolveInspectionImageUrl(item.expiry_image) });
     }
 
     getAppearanceImageUrls(item).forEach((src, index) => {
-      photos.push({ label: `부식 ${index + 1}면`, src });
+      photos.push({ label: `부식 ${index + 1}면`, src: resolveInspectionImageUrl(src) });
     });
 
     if (item.full_image) {
-      photos.push({ label: "전체 사진", src: item.full_image });
+      photos.push({ label: "전체 사진", src: resolveInspectionImageUrl(item.full_image) });
     }
 
     return photos;
+  };
+
+  const selectPhotoRecord = (item) => {
+    setSelectedPhotoRecordId(item.id);
+    setSelectedPhotoRecordSnapshot(item);
   };
 
   const openExpandedPhoto = (photo) => {
@@ -258,6 +292,24 @@ function App() {
     }));
   };
 
+  const isRobotPoseAvailable = Boolean(robotPose?.available);
+  const isLiveMapReady = liveMapLoaded;
+  const robotMarkerStyle = isRobotPoseAvailable
+    ? {
+        left: `${Math.max(0, Math.min(100, robotPose.display_percent_x ?? robotPose.percent_x))}%`,
+        top: `${Math.max(0, Math.min(100, robotPose.display_percent_y ?? robotPose.percent_y))}%`,
+        transform: `translate(-50%, -50%) rotate(${robotPose.display_yaw ?? Math.PI / 2 - (robotPose.yaw || 0)}rad)`,
+      }
+    : {};
+
+  const formatRobotPose = () => {
+    if (!isRobotPoseAvailable) {
+      return "위치 수신 대기";
+    }
+
+    return `x ${robotPose.x.toFixed(2)} / y ${robotPose.y.toFixed(2)}`;
+  };
+
   const refreshLiveStreams = () => {
     if (streamRetryTimerRef.current) {
       return;
@@ -270,6 +322,10 @@ function App() {
   };
 
   const setNeopixelBrightness = (target, value) => {
+    if (inspectionRunning) {
+      return;
+    }
+
     const brightness = Math.max(0, Math.min(255, Number(value)));
     setNeopixelValues((prev) => ({
       ...prev,
@@ -299,6 +355,46 @@ function App() {
     }, 250);
   };
 
+  const setEmergencyMotorStop = async (active) => {
+    setEmergencyStopActive(active);
+    try {
+      await fetch(`${robotPoseBaseUrl}/motor_stop`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ active }),
+      });
+    } catch (error) {
+      console.error("Emergency motor stop request failed:", error);
+    }
+  };
+
+  const toggleEmergencyMotorStop = () => {
+    setEmergencyMotorStop(!emergencyStopActive);
+  };
+
+  const startInspectionMission = async () => {
+    if (inspectionRunning) {
+      return;
+    }
+
+    try {
+      await fetch(`${robotPoseBaseUrl}/mission/start`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Mission start request failed:", error);
+    }
+  };
+
+  const renderConnectionStatus = (connected) => (
+    <div className={`connection-row ${connected ? "connection-row-connected" : ""}`}>
+      <span className={`connection-dot ${connected ? "connection-dot-connected" : ""}`} />
+      <span>{connected ? "연결 완료" : "연결 안됨"}</span>
+    </div>
+  );
+
   useEffect(() => {
     let isMounted = true;
 
@@ -314,6 +410,15 @@ function App() {
 
         const payload = await response.json();
         if (isMounted && payload.state) {
+          setInspectionRunning(Boolean(payload.led_locked || payload.inspection?.running));
+          setMissionLogs(Array.isArray(payload.inspection?.logs) ? payload.inspection.logs : []);
+          setHardwareConnected({
+            ballscrew: Boolean(payload.hardware?.ballscrew),
+            st3235: Boolean(payload.hardware?.st3235),
+            neopixel: Boolean(payload.hardware?.neopixel),
+            tetraMotor: Boolean(payload.hardware?.tetra_motor),
+            lidar: Boolean(payload.hardware?.lidar),
+          });
           setNeopixelValues({
             internal: Number(payload.state.internal || 0),
             external: Number(payload.state.external || 0),
@@ -349,10 +454,17 @@ function App() {
 
         setData(result);
         setSelectedPhotoRecordId((selectedId) => {
-          if (!selectedId || result.some((item) => item.id === selectedId)) {
+          if (!selectedId) {
             return selectedId;
           }
 
+          const updatedSelectedRecord = result.find((item) => item.id === selectedId);
+          if (updatedSelectedRecord) {
+            setSelectedPhotoRecordSnapshot(updatedSelectedRecord);
+            return selectedId;
+          }
+
+          setSelectedPhotoRecordSnapshot(null);
           return "";
         });
       },
@@ -455,6 +567,50 @@ function App() {
     return () => clearInterval(intervalId);
   }, [apriltagStreamBaseUrl]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRobotPose = async () => {
+      try {
+        const response = await fetch(`${robotPoseBaseUrl}/pose`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("robot pose request failed");
+        }
+
+        const pose = await response.json();
+        if (isMounted) {
+          setRobotPose(pose);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setRobotPose({ available: false });
+        }
+      }
+    };
+
+    loadRobotPose();
+    const intervalId = setInterval(loadRobotPose, 300);
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [robotPoseBaseUrl]);
+
+  useEffect(() => {
+    if (activeMapView !== "live" || liveMapLoaded) {
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      setLiveMapRetryKey(Date.now());
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [activeMapView, liveMapLoaded]);
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "home":
@@ -463,7 +619,9 @@ function App() {
             <div className="home-live-area">
               <div className="section-title-row">
                 <h2>Live Monitoring</h2>
-                <span className="system-status">Standby</span>
+                <span className={`system-status ${inspectionRunning ? "system-status-running" : ""}`}>
+                  {inspectionRunning ? "검사 진행 중" : "Standby"}
+                </span>
               </div>
               <div className="home-live-content">
                 <div className="live-grid">
@@ -511,12 +669,15 @@ function App() {
                   </div>
                 </div>
                 <div className="inspection-log-panel">
-                  <div>[22:45:01] EXT1 이동 시작</div>
-                  <div>[22:45:08] 카메라 촬영 완료</div>
-                  <div>[22:45:10] 압력게이지 정상</div>
-                  <div>[22:45:12] OCR 완료</div>
-                  <div>[22:45:15] 부식 없음</div>
-                  <div>[22:45:16] 검사 종료</div>
+                  {missionLogs.length > 0 ? (
+                    missionLogs.slice(-12).map((log, index) => (
+                      <div key={`${log.time || "log"}-${index}`}>
+                        [{log.time || "--:--:--"}] {log.message}
+                      </div>
+                    ))
+                  ) : (
+                    <div>[--:--:--] 작업 대기 중</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -535,7 +696,14 @@ function App() {
                 <div className="command-group-title">검사 · 복귀</div>
                 <div className="command-button-stack">
                   <button className="secondary-action" type="button">홈 위치</button>
-                  <button className="primary-action" type="button">검사 실행</button>
+                  <button
+                    className="primary-action"
+                    type="button"
+                    disabled={inspectionRunning}
+                    onClick={startInspectionMission}
+                  >
+                    {inspectionRunning ? "검사 진행 중" : "검사 실행"}
+                  </button>
                 </div>
               </div>
 
@@ -589,10 +757,16 @@ function App() {
                 </div>
               </div>
 
-              <button className="emergency-stop-button" type="button">
-                <span>⛔</span>
-                <span>EMERGENCY</span>
-                <span>STOP</span>
+              <button
+                className={`emergency-stop-button ${emergencyStopActive ? "emergency-stop-button-active" : ""}`}
+                type="button"
+                aria-pressed={emergencyStopActive}
+                onClick={toggleEmergencyMotorStop}
+                onContextMenu={(event) => event.preventDefault()}
+              >
+                <span className="emergency-stop-icon" />
+                <span>{emergencyStopActive ? "MOTOR" : "EMERGENCY"}</span>
+                <span>{emergencyStopActive ? "STOPPED" : "STOP"}</span>
               </button>
             </aside>
           </div>
@@ -643,59 +817,63 @@ function App() {
             <div className="hardware-status-list">
               <div className="hardware-status-card">
                 <span>상하 이동 모듈</span>
-                <div className="connection-row">
-                  <span className="connection-dot"></span>
-                  <span>연결 안됨</span>
-                </div>
+                {renderConnectionStatus(hardwareConnected.ballscrew)}
               </div>
               <div className="hardware-status-card">
                 <span>소화기 회전 모듈</span>
-                <div className="connection-row">
-                  <span className="connection-dot"></span>
-                  <span>연결 안됨</span>
-                </div>
+                {renderConnectionStatus(hardwareConnected.st3235)}
               </div>
               <div className="hardware-status-card">
                 <span>소화기 검사 카메라 Top</span>
-                <div className="connection-row">
-                  <span className="connection-dot"></span>
-                  <span>연결 안됨</span>
-                </div>
+                {renderConnectionStatus(liveConnected.camera1)}
               </div>
               <div className="hardware-status-card">
                 <span>소화기 검사 카메라 Bottom</span>
-                <div className="connection-row">
-                  <span className="connection-dot"></span>
-                  <span>연결 안됨</span>
-                </div>
+                {renderConnectionStatus(liveConnected.camera2)}
+              </div>
+              <div className="hardware-status-card">
+                <span>테트라 모터</span>
+                {renderConnectionStatus(hardwareConnected.tetraMotor)}
+              </div>
+              <div className="hardware-status-card">
+                <span>LiDAR</span>
+                {renderConnectionStatus(hardwareConnected.lidar)}
+              </div>
+              <div className="hardware-status-card">
+                <span>NeoPixel LED</span>
+                {renderConnectionStatus(hardwareConnected.neopixel)}
               </div>
               <div className="hardware-status-card">
                 <span>LED(소화기 내부)</span>
-                <div className="neopixel-control">
+                <div className={`neopixel-control ${inspectionRunning ? "neopixel-control-locked" : ""}`}>
                   <input
                     className="neopixel-slider"
                     type="range"
                     min="0"
                     max="255"
                     value={neopixelValues.internal}
+                    disabled={inspectionRunning}
                     onChange={(event) => setNeopixelBrightness("internal", event.target.value)}
                   />
                   <span>{neopixelValues.internal}</span>
                 </div>
+                {inspectionRunning && <small className="neopixel-lock-message">검사 중 LED 조정 잠김</small>}
               </div>
               <div className="hardware-status-card">
                 <span>LED(소화기 외부)</span>
-                <div className="neopixel-control">
+                <div className={`neopixel-control ${inspectionRunning ? "neopixel-control-locked" : ""}`}>
                   <input
                     className="neopixel-slider"
                     type="range"
                     min="0"
                     max="255"
                     value={neopixelValues.external}
+                    disabled={inspectionRunning}
                     onChange={(event) => setNeopixelBrightness("external", event.target.value)}
                   />
                   <span>{neopixelValues.external}</span>
                 </div>
+                {inspectionRunning && <small className="neopixel-lock-message">검사 중 LED 조정 잠김</small>}
               </div>
             </div>
           </div>
@@ -827,6 +1005,7 @@ function App() {
                       });
                       setFilterError("");
                       setSelectedPhotoRecordId("");
+                      setSelectedPhotoRecordSnapshot(null);
                     }}
                   >
                     적용
@@ -871,7 +1050,7 @@ function App() {
                             <button
                               className="inspection-id-button"
                               type="button"
-                              onClick={() => setSelectedPhotoRecordId(item.id)}
+                              onClick={() => selectPhotoRecord(item)}
                             >
                               {getExtinguisherName(item, index)}
                             </button>
@@ -932,14 +1111,47 @@ function App() {
               Live map
             </button>
           </div>
-          <div className="map-image-frame">
-            <img src="/B1F.jpg" alt="B1F Map" className="map-image" />
+          <div className={`map-image-frame ${activeMapView === "live" ? "map-image-frame-live" : ""}`}>
+            <img
+              src={
+                activeMapView === "live"
+                  ? `${robotPoseBaseUrl}/map.png?t=${liveMapRetryKey}`
+                  : "/B1F.jpg"
+              }
+              alt={activeMapView === "live" ? "Live map" : "B1F Map"}
+              className={`map-image ${activeMapView === "live" ? "map-image-live" : ""} ${
+                activeMapView === "live" && !isLiveMapReady ? "map-image-loading" : ""
+              }`}
+              onLoad={() => {
+                if (activeMapView === "live") {
+                  setLiveMapLoaded(true);
+                }
+              }}
+              onError={() => {
+                if (activeMapView === "live") {
+                  setLiveMapLoaded(false);
+                }
+              }}
+            />
+            {activeMapView === "live" && !isLiveMapReady && (
+              <div className="live-map-placeholder">
+                <div className="live-map-loader" />
+                <strong>Live map 연결 대기</strong>
+                <span>맵 서버 신호를 확인하는 중</span>
+              </div>
+            )}
+            {activeMapView === "live" && isRobotPoseAvailable && (
+              <span
+                className="map-robot-marker"
+                style={robotMarkerStyle}
+                aria-label="실시간 로봇 위치"
+              />
+            )}
             {activeMapView === "live" && (
-              <>
-                <span className="map-live-marker marker-ext1">EXT1</span>
-                <span className="map-live-marker marker-ext2">EXT2</span>
-                <span className="map-live-marker marker-ext3">EXT3</span>
-              </>
+              <div className="map-pose-status">
+                <span className={isRobotPoseAvailable ? "pose-online" : "pose-offline"} />
+                {formatRobotPose()}
+              </div>
             )}
           </div>
         </div>

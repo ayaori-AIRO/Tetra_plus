@@ -38,6 +38,7 @@ setup(
             'waypoint_stop = tetra_navigation.waypoint_stop:main',
             'apriltag_visualizer = tetra_navigation.apriltag_visualizer:main',
             'apriltag_stream_server = tetra_navigation.apriltag_stream_server:main',
+            'robot_pose_server = tetra_navigation.robot_pose_server:main',
             'apriltag_servo = tetra_navigation.apriltag_servo:main',
             'cmd_vel_mux = tetra_navigation.cmd_vel_mux:main',
             'mission_manager = tetra_navigation.mission_manager:main',

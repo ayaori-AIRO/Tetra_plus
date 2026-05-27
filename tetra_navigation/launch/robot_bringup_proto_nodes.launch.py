@@ -9,6 +9,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     mission_autostart = LaunchConfiguration('mission_autostart')
+    wait_for_ui_start = LaunchConfiguration('wait_for_ui_start')
     start_docking_after_nav_active = LaunchConfiguration('start_docking_after_nav_active')
     dock_after_waypoint = LaunchConfiguration('dock_after_waypoint')
     target_waypoint = LaunchConfiguration('target_waypoint')
@@ -29,6 +30,11 @@ def generate_launch_description():
     waypoint2_forward_after_inspection_speed = LaunchConfiguration(
         'waypoint2_forward_after_inspection_speed'
     )
+    return_home_after_mission = LaunchConfiguration('return_home_after_mission')
+    home_x = LaunchConfiguration('home_x')
+    home_y = LaunchConfiguration('home_y')
+    home_z = LaunchConfiguration('home_z')
+    home_w = LaunchConfiguration('home_w')
     use_proto_mission_manager = LaunchConfiguration('use_proto_mission_manager')
 
     return LaunchDescription([
@@ -36,6 +42,11 @@ def generate_launch_description():
             'mission_autostart',
             default_value='false',
             description='Start the front-only proto mission sequence automatically.'
+        ),
+        DeclareLaunchArgument(
+            'wait_for_ui_start',
+            default_value='true',
+            description='Wait for the web UI inspection start button before starting the proto mission.'
         ),
         DeclareLaunchArgument(
             'start_docking_after_nav_active',
@@ -54,7 +65,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'inspection_waypoints',
-            default_value='[1, 2]',
+            default_value='[1, 2, 3]',
             description='Ordered fire extinguisher waypoint numbers for proto inspection.'
         ),
         DeclareLaunchArgument(
@@ -118,6 +129,31 @@ def generate_launch_description():
             description='Drive speed in m/s after waypoint 2 inspection finishes.'
         ),
         DeclareLaunchArgument(
+            'return_home_after_mission',
+            default_value='true',
+            description='Navigate back to home after all proto inspections finish.'
+        ),
+        DeclareLaunchArgument(
+            'home_x',
+            default_value='0.0',
+            description='Home pose x in map frame.'
+        ),
+        DeclareLaunchArgument(
+            'home_y',
+            default_value='0.0',
+            description='Home pose y in map frame.'
+        ),
+        DeclareLaunchArgument(
+            'home_z',
+            default_value='0.0',
+            description='Home pose orientation z in map frame.'
+        ),
+        DeclareLaunchArgument(
+            'home_w',
+            default_value='1.0',
+            description='Home pose orientation w in map frame.'
+        ),
+        DeclareLaunchArgument(
             'use_proto_mission_manager',
             default_value='true',
             description='Start the proto mission manager node.'
@@ -129,6 +165,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'autostart': mission_autostart,
+                'wait_for_ui_start': wait_for_ui_start,
                 'start_docking_after_nav_active': start_docking_after_nav_active,
                 'dock_after_waypoint': dock_after_waypoint,
                 'target_waypoint': target_waypoint,
@@ -149,6 +186,11 @@ def generate_launch_description():
                 'waypoint2_forward_after_inspection_speed': (
                     waypoint2_forward_after_inspection_speed
                 ),
+                'return_home_after_mission': return_home_after_mission,
+                'home_x': home_x,
+                'home_y': home_y,
+                'home_z': home_z,
+                'home_w': home_w,
             }],
             condition=IfCondition(use_proto_mission_manager),
         ),

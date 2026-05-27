@@ -14,6 +14,7 @@ from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from std_msgs.msg import Empty
 from std_msgs.msg import String
 from tetra_msgs.action import DockToTag
 
@@ -22,6 +23,7 @@ class MissionManager(Node):
     def __init__(self):
         super().__init__('mission_manager')
         self.declare_parameter('autostart', False)
+        self.declare_parameter('wait_for_ui_start', False)
         self.declare_parameter('start_docking_after_nav_active', False)
         self.declare_parameter('dock_after_waypoint', True)
         self.declare_parameter('target_waypoint', 1)
@@ -50,6 +52,7 @@ class MissionManager(Node):
         self.declare_parameter('st3235_return_step_delay_sec', 1.0)
         self.declare_parameter('inspection_duration_sec', 60.0)
         self.autostart = bool(self.get_parameter('autostart').value)
+        self.wait_for_ui_start = bool(self.get_parameter('wait_for_ui_start').value)
         self.start_docking_after_nav_active = bool(
             self.get_parameter('start_docking_after_nav_active').value
         )
@@ -94,16 +97,47 @@ class MissionManager(Node):
         self.navigator = BasicNavigator()
         self.dock_client = ActionClient(self, DockToTag, 'dock_to_tag')
         self.cmd_vel_select_pub = self.create_publisher(String, '/cmd_vel_mux/select', 10)
+        self.create_subscription(Empty, '/mission/start', self.start_mission_callback, 10)
         self.start_timer = None
         self.mission_thread = None
         self.object_detection_process = None
         self.current_extinguisher_id = 1
+        self.inspection_status_path = os.path.join(
+            os.path.dirname(os.path.dirname(self.object_detection_script)),
+            'config',
+            'inspection_status.json',
+        )
+        self.reset_inspection_status_on_startup()
 
-        if self.autostart:
+        if self.autostart and not self.wait_for_ui_start:
             self.get_logger().info('Mission manager autostart is enabled.')
             self.start_timer = self.create_timer(1.0, self.start_mission)
         else:
-            self.get_logger().info('Mission manager ready. Autostart is disabled.')
+            self.get_logger().info(
+                'Mission manager ready. Waiting for UI start.'
+                if self.wait_for_ui_start
+                else 'Mission manager ready. Autostart is disabled.'
+            )
+
+    def start_mission_callback(self, _msg):
+        self.get_logger().info('Mission start requested from UI.')
+        self.start_mission()
+
+    def reset_inspection_status_on_startup(self):
+        os.makedirs(os.path.dirname(self.inspection_status_path), exist_ok=True)
+        payload = {
+            'running': False,
+            'updated_at': time.time(),
+            'action': '',
+            'logs': [],
+        }
+        try:
+            with open(self.inspection_status_path, 'w', encoding='utf-8') as status_file:
+                json.dump(payload, status_file)
+        except OSError as exc:
+            self.get_logger().warn(
+                f'Failed to reset inspection status file on startup: {exc}'
+            )
 
     def start_mission(self):
         if self.start_timer is not None:
@@ -146,6 +180,12 @@ class MissionManager(Node):
                 'y': 0.0513142952244203,
                 'z': 0.6965519599773928,
                 'w': 0.7175063533179706,
+            },
+            3: {
+                'x': 40.68936856521227,
+                'y': 0.2179757647171073,
+                'z': -0.7100444040265033,
+                'w': 0.704156903190367,
             },
         }
         waypoint = waypoints.get(self.target_waypoint, waypoints[1])
@@ -268,7 +308,54 @@ class MissionManager(Node):
         self.cmd_vel_select_pub.publish(msg)
         self.get_logger().info(f'Selected cmd_vel source: {source}')
 
+    def read_inspection_status(self):
+        try:
+            with open(self.inspection_status_path, 'r', encoding='utf-8') as status_file:
+                return json.load(status_file)
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return {}
+
+    def set_inspection_running(self, running, action=None, append_log=True):
+        os.makedirs(os.path.dirname(self.inspection_status_path), exist_ok=True)
+        previous = self.read_inspection_status()
+        logs = list(previous.get('logs', []))[-29:]
+        if action and append_log:
+            logs.append({
+                'time': time.strftime('%H:%M:%S'),
+                'message': action,
+            })
+        payload = {
+            'running': bool(running),
+            'updated_at': time.time(),
+            'action': action if action is not None else previous.get('action', ''),
+            'logs': logs,
+        }
+        try:
+            with open(self.inspection_status_path, 'w', encoding='utf-8') as status_file:
+                json.dump(payload, status_file)
+        except OSError as exc:
+            self.get_logger().warn(
+                f'Failed to update inspection status file: {exc}'
+            )
+
+    def set_mission_action(self, action, running=None):
+        previous = self.read_inspection_status()
+        self.set_inspection_running(
+            previous.get('running', False) if running is None else running,
+            action,
+        )
+
     def run_inspection_sequence(self):
+        was_running = bool(self.read_inspection_status().get('running'))
+        if not was_running:
+            self.set_inspection_running(True, '검사 시작')
+        try:
+            return self._run_inspection_sequence()
+        finally:
+            if not was_running:
+                self.set_inspection_running(False, '검사 종료')
+
+    def _run_inspection_sequence(self):
         self.turn_on_internal_led()
 
         if not self.start_object_detection():

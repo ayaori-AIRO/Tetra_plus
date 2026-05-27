@@ -123,6 +123,15 @@ def generate_launch_description():
         condition=IfCondition(use_apriltag),
     )
 
+    robot_pose_server = ExecuteProcess(
+        cmd=[
+            'python3',
+            '-u',
+            '/home/ayaori/ros2_ws/src/tetra/tetra_navigation/tetra_navigation/robot_pose_server.py',
+        ],
+        output='screen',
+    )
+
     apriltag_servo = Node(
         package='tetra_navigation',
         executable='apriltag_servo',
@@ -253,6 +262,7 @@ def generate_launch_description():
             apriltag_node,
             apriltag_visualizer,
             apriltag_stream_server,
+            robot_pose_server,
             apriltag_servo,
             neopixel_api_server,
             mission_manager,
