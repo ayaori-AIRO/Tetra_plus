@@ -12,7 +12,7 @@
 import rclpy
 from rclpy.node import Node
 
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 from apriltag_msgs.msg import AprilTagDetectionArray
 
 import numpy as np
@@ -23,7 +23,17 @@ class AprilTagVisualizer(Node):
     def __init__(self):
         super().__init__('apriltag_visualizer')
 
+        self.declare_parameter('far_tag_size', 0.10)
+        self.declare_parameter('mid_tag_size', 0.05)
+        self.declare_parameter('near_tag_size', 0.01)
+        self.declare_parameter('camera_info_topic', '/camera/camera/color/camera_info')
+
         self.latest_detections = None
+        self.camera_matrix = None
+        self.dist_coeffs = None
+        self.far_tag_size = float(self.get_parameter('far_tag_size').value)
+        self.mid_tag_size = float(self.get_parameter('mid_tag_size').value)
+        self.near_tag_size = float(self.get_parameter('near_tag_size').value)
 
         self.image_sub = self.create_subscription(
             Image,
@@ -39,6 +49,13 @@ class AprilTagVisualizer(Node):
             10
         )
 
+        self.camera_info_sub = self.create_subscription(
+            CameraInfo,
+            self.get_parameter('camera_info_topic').value,
+            self.camera_info_callback,
+            10
+        )
+
         self.image_pub = self.create_publisher(
             Image,
             '/apriltag/annotated_image',
@@ -47,6 +64,10 @@ class AprilTagVisualizer(Node):
 
     def detection_callback(self, msg):
         self.latest_detections = msg
+
+    def camera_info_callback(self, msg):
+        self.camera_matrix = np.array(msg.k, dtype=np.float64).reshape((3, 3))
+        self.dist_coeffs = np.array(msg.d, dtype=np.float64)
 
     def image_callback(self, msg):
         frame = np.frombuffer(msg.data, dtype=np.uint8)
@@ -81,6 +102,14 @@ class AprilTagVisualizer(Node):
                 cv2.putText(frame, coord_text, (pts[0][0], pts[0][1] - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
+                distance = self.estimate_distance(det)
+                if distance is not None:
+                    distance_text = f"camera-QR: {distance:.3f} m"
+                else:
+                    distance_text = "camera-QR: n/a"
+                cv2.putText(frame, distance_text, (pts[0][0], pts[0][1] + 18),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
         out_msg = Image()
         out_msg.header = msg.header
         out_msg.height = frame.shape[0]
@@ -91,6 +120,42 @@ class AprilTagVisualizer(Node):
         out_msg.data = frame.tobytes()
 
         self.image_pub.publish(out_msg)
+
+    def estimate_distance(self, detection):
+        if self.camera_matrix is None or self.dist_coeffs is None:
+            return None
+
+        tag_size = self.tag_size_for_id(int(detection.id))
+        half = tag_size / 2.0
+        object_points = np.array([
+            [-half, half, 0.0],
+            [half, half, 0.0],
+            [half, -half, 0.0],
+            [-half, -half, 0.0],
+        ], dtype=np.float64)
+        image_points = np.array(
+            [[corner.x, corner.y] for corner in detection.corners],
+            dtype=np.float64
+        )
+
+        success, _, tvec = cv2.solvePnP(
+            object_points,
+            image_points,
+            self.camera_matrix,
+            self.dist_coeffs,
+            flags=cv2.SOLVEPNP_IPPE_SQUARE
+        )
+        if not success:
+            return None
+
+        return float(tvec[2][0])
+
+    def tag_size_for_id(self, tag_id):
+        if tag_id == 10:
+            return self.far_tag_size
+        if tag_id == 9:
+            return self.mid_tag_size
+        return self.near_tag_size
 
 
 def main(args=None):

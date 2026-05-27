@@ -49,7 +49,7 @@ def main():
             '-p', 'switch_distance:=0.45',
             '-p', 'near_switch_distance:=0.25',
             '-p', 'near_target_distance:=0.03',
-            '-p', 'distance_tolerance:=0.001',
+            '-p', 'distance_tolerance:=0.007',
             '-p', 'min_linear_speed:=0.003',
             '-p', 'stop_after_reached:=true'
         ])

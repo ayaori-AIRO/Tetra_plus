@@ -8,7 +8,7 @@ import urllib.error
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import Point, PoseStamped
+from geometry_msgs.msg import Point, PoseStamped, Twist
 from nav2_msgs.action import DriveOnHeading
 from nav2_simple_commander.robot_navigator import TaskResult
 from rclpy.action import ActionClient
@@ -64,6 +64,8 @@ class MissionManagerProto(MissionManager):
             DriveOnHeading,
             'drive_on_heading',
         )
+        self.nav_cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_vel_out_pub = self.create_publisher(Twist, '/cmd_vel_out', 10)
         self.get_logger().info(
             'Mission manager proto mode: front-only inspection, no ST3235/ball screw.'
         )
@@ -465,6 +467,10 @@ class MissionManagerProto(MissionManager):
         return True
 
     def drive_on_heading(self, distance, speed, label):
+        if speed == 0.0:
+            self.get_logger().error(f'{label} speed must not be zero.')
+            return False
+
         minimum_time_allowance_sec = (
             abs(distance) / max(abs(speed), 0.001)
         ) + 5.0
@@ -507,10 +513,28 @@ class MissionManagerProto(MissionManager):
             return False
 
         result_future = goal_handle.get_result_async()
-        while rclpy.ok() and not result_future.done():
+        expected_drive_sec = abs(distance) / max(abs(speed), 0.001)
+        hard_stop_deadline = time.monotonic() + expected_drive_sec + 0.75
+        while (
+            rclpy.ok()
+            and not result_future.done()
+            and time.monotonic() < hard_stop_deadline
+        ):
             time.sleep(0.05)
 
-        self.select_cmd_vel_source('stop')
+        if not result_future.done():
+            self.get_logger().warn(
+                f'{label} exceeded expected drive time '
+                f'({expected_drive_sec:.1f}s). Canceling and forcing stop.'
+            )
+            cancel_future = goal_handle.cancel_goal_async()
+            cancel_deadline = time.monotonic() + 1.0
+            while rclpy.ok() and not cancel_future.done() and time.monotonic() < cancel_deadline:
+                time.sleep(0.05)
+            self.force_stop_motion()
+            return False
+
+        self.force_stop_motion()
         if not rclpy.ok():
             return False
 
@@ -528,6 +552,14 @@ class MissionManagerProto(MissionManager):
             f'error_msg={getattr(result, "error_msg", "n/a")}'
         )
         return False
+
+    def force_stop_motion(self):
+        self.select_cmd_vel_source('stop')
+        stop_cmd = Twist()
+        for _ in range(5):
+            self.nav_cmd_pub.publish(stop_cmd)
+            self.cmd_vel_out_pub.publish(stop_cmd)
+            time.sleep(0.05)
 
 
 def main(args=None):

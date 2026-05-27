@@ -141,7 +141,7 @@ def generate_launch_description():
             'switch_distance': 0.45,
             'near_switch_distance': 0.25,
             'near_target_distance': 0.03,
-            'distance_tolerance': 0.001,
+            'distance_tolerance': 0.007,
             'min_linear_speed': 0.003,
             'cmd_vel_topic': '/cmd_vel_servo',
             'stop_after_reached': False,
