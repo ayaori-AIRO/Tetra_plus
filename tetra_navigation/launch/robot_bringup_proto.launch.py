@@ -20,6 +20,11 @@ def generate_launch_description():
             description='Wait for the web UI inspection start button before starting the proto mission.',
         ),
         DeclareLaunchArgument(
+            'rviz',
+            default_value='true',
+            description='Launch RViz as part of robot bringup.',
+        ),
+        DeclareLaunchArgument(
             'target_waypoint',
             default_value='1',
             description='Fire extinguisher waypoint number for single-target tests.',
@@ -91,6 +96,7 @@ def generate_launch_description():
                 'mission_autostart': LaunchConfiguration('mission_autostart', default='false'),
                 'target_waypoint': LaunchConfiguration('target_waypoint', default='1'),
                 'use_mission_manager': 'false',
+                'use_rviz': LaunchConfiguration('rviz', default='true'),
             }.items(),
         ),
         IncludeLaunchDescription(

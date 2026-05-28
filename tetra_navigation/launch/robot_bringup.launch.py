@@ -51,11 +51,14 @@ def generate_launch_description():
             (
                 'mkdir -p /tmp/tetra_ui_logs; '
                 ': > /tmp/tetra_ui_logs/tetra_configuration.log; '
-                'ros2 launch tetra tetra_configuration.launch.py '
+                'ros2 launch tetra tetra_configuration.launch.py rviz:=$USE_RVIZ '
                 '2>&1 | tee -a /tmp/tetra_ui_logs/tetra_configuration.log'
             ),
         ],
         output='screen',
+        additional_env={
+            'USE_RVIZ': use_rviz,
+        },
     )
 
     lidar = ExecuteProcess(
@@ -65,11 +68,14 @@ def generate_launch_description():
             (
                 'mkdir -p /tmp/tetra_ui_logs; '
                 ': > /tmp/tetra_ui_logs/lidar.log; '
-                'ros2 launch tetra_navigation view_sllidar_a2m12_launch.py '
+                'ros2 launch tetra_navigation view_sllidar_a2m12_launch.py rviz:=$USE_RVIZ '
                 '2>&1 | tee -a /tmp/tetra_ui_logs/lidar.log'
             ),
         ],
         output='screen',
+        additional_env={
+            'USE_RVIZ': use_rviz,
+        },
     )
 
     nav2_bringup = ExecuteProcess(

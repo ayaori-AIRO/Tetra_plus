@@ -2,6 +2,7 @@ build/
 install/
 log/
 logs/
+initenv.sh
 
 Inspection/react/inspection-web/node_modules/
 Inspection/react/inspection-web/build/

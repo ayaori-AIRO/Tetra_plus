@@ -95,24 +95,24 @@ def run_corrosion_for_image(image_path, output_path):
         image,
         candidate_mask,
         body_mask,
-        tile_size=64,
-        color_ratio_thresh=0.018,
-        texture_thresh=18.0,
+        tile_size=corrosion_check.DEFAULT_TILE_SIZE,
+        color_ratio_thresh=corrosion_check.DEFAULT_COLOR_RATIO,
+        texture_thresh=corrosion_check.DEFAULT_TEXTURE_THRESH,
     )
     small_mask = corrosion_check.recover_small_candidates(
         candidate_mask,
         tile_mask,
         body_mask,
         image,
-        small_area=12.0,
-        texture_thresh=18.0,
+        small_area=corrosion_check.DEFAULT_SMALL_AREA,
+        texture_thresh=corrosion_check.DEFAULT_TEXTURE_THRESH,
     )
-    final_candidate_mask = cv2.bitwise_or(tile_mask, small_mask)
+    final_candidate_mask = candidate_mask
     regions = corrosion_check.find_corrosion_regions(
         final_candidate_mask,
         body_mask,
-        min_area=35.0,
-        texture_thresh=18.0,
+        min_area=corrosion_check.DEFAULT_MIN_AREA,
+        texture_thresh=corrosion_check.DEFAULT_TEXTURE_THRESH,
         image=image,
     )
     region_mask = corrosion_check.build_region_mask(final_candidate_mask.shape, regions)

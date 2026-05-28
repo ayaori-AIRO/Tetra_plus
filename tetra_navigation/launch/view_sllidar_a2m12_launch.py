@@ -9,6 +9,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import LogInfo
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -21,6 +22,7 @@ def generate_launch_description():
     inverted = LaunchConfiguration('inverted', default='false')
     angle_compensate = LaunchConfiguration('angle_compensate', default='true')
     scan_mode = LaunchConfiguration('scan_mode', default='Sensitivity')
+    rviz = LaunchConfiguration('rviz', default='true')
 
     rviz_config_dir = os.path.join(
             get_package_share_directory('sllidar_ros2'),
@@ -63,6 +65,11 @@ def generate_launch_description():
             default_value=scan_mode,
             description='Specifying scan mode of lidar'),
 
+        DeclareLaunchArgument(
+            'rviz',
+            default_value=rviz,
+            description='Whether to launch RViz for the lidar view'),
+
         Node(
             package='sllidar_ros2',
             executable='sllidar_node',
@@ -81,5 +88,6 @@ def generate_launch_description():
             executable='rviz2',
             name='rviz2',
             arguments=['-d', rviz_config_dir],
-            output='screen'),
+            output='screen',
+            condition=IfCondition(rviz)),
     ])

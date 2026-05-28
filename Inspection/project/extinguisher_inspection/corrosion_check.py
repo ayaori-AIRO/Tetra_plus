@@ -7,6 +7,12 @@ import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
+DEFAULT_TILE_SIZE = 64
+DEFAULT_COLOR_RATIO = 0.018
+DEFAULT_TEXTURE_THRESH = 8.0
+DEFAULT_MIN_AREA = 190.0
+DEFAULT_SMALL_AREA = 12.0
+
 
 def fill_body_rows(red_mask, image_shape):
     body_mask = np.zeros(red_mask.shape, dtype=np.uint8)
@@ -405,11 +411,11 @@ def parse_args():
         "--image",
         default="/home/ayaori/ros2_ws/src/tetra/Inspection/capture/inspection/id3/full/fallback_camera1_top_camera2_bottom_20260528_025806.jpg",
     )
-    parser.add_argument("--tile-size", type=int, default=64)
-    parser.add_argument("--color-ratio", type=float, default=0.018)
-    parser.add_argument("--texture-thresh", type=float, default=8.0)
-    parser.add_argument("--min-area", type=float, default=190.0)
-    parser.add_argument("--small-area", type=float, default=12.0)
+    parser.add_argument("--tile-size", type=int, default=DEFAULT_TILE_SIZE)
+    parser.add_argument("--color-ratio", type=float, default=DEFAULT_COLOR_RATIO)
+    parser.add_argument("--texture-thresh", type=float, default=DEFAULT_TEXTURE_THRESH)
+    parser.add_argument("--min-area", type=float, default=DEFAULT_MIN_AREA)
+    parser.add_argument("--small-area", type=float, default=DEFAULT_SMALL_AREA)
     parser.add_argument("--display-scale", type=float, default=0.6)
     parser.add_argument("--no-show", action="store_true")
     parser.add_argument("--show-tiles", action="store_true")

@@ -14,9 +14,14 @@ from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 def generate_launch_description():
   ekf_option = LaunchConfiguration("ekf_option")
+  rviz = LaunchConfiguration("rviz")
   ekf_option_arg = DeclareLaunchArgument(
     'ekf_option',
     default_value="False"
+  )
+  rviz_arg = DeclareLaunchArgument(
+    'rviz',
+    default_value="True"
   )
   tetra_node = Node(
     package="tetra",
@@ -36,7 +41,10 @@ def generate_launch_description():
               get_package_share_directory("tetra_description"), "launch", "tetra.launch.py"
 
           )
-      )
+      ),
+      launch_arguments={
+        'start_rviz': rviz,
+      }.items(),
   )
   # rplidar_prefix = get_package_share_directory("sllidar_ros2")
   # start_rplidar_cmd = IncludeLaunchDescription(
@@ -44,6 +52,7 @@ def generate_launch_description():
   # )
   return LaunchDescription([
     ekf_option_arg,
+    rviz_arg,
     tetra_node,
     start_robot_description_cmd,
     # start_rplidar_cmd,
