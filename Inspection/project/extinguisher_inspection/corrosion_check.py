@@ -8,35 +8,38 @@ import numpy as np
 BASE_DIR = Path(__file__).resolve().parents[1]
 
 
-def fill_body_rows(red_mask, image_shape):
+def fill_body_rows(red_mask, image_shape, fill_from_y=None):
     body_mask = np.zeros(red_mask.shape, dtype=np.uint8)
     min_segment_width = max(12, int(image_shape[1] * 0.04))
     min_handle_width = max(5, int(image_shape[1] * 0.015))
-    handle_limit_y = int(image_shape[0] * 0.25)
+    body_span_width = int(image_shape[1] * 0.28)
+    body_density_thresh = 0.35
+    handle_limit_y = int(image_shape[0] * 0.25) if fill_from_y is None else int(fill_from_y)
 
     for y in range(red_mask.shape[0]):
         xs = np.where(red_mask[y] > 0)[0]
         if xs.size < min_handle_width:
             continue
 
-        if y < handle_limit_y:
-            gaps = np.where(np.diff(xs) > 1)[0]
-            starts = np.r_[0, gaps + 1]
-            ends = np.r_[gaps, xs.size - 1]
+        x1, x2 = int(xs.min()), int(xs.max())
+        span_width = max(1, x2 - x1)
+        red_density = xs.size / float(span_width)
+        is_body_like_row = span_width >= body_span_width and red_density >= body_density_thresh
 
-            for start, end in zip(starts, ends):
-                x1, x2 = int(xs[start]), int(xs[end])
-                if x2 - x1 < min_handle_width:
-                    continue
+        if y >= handle_limit_y and is_body_like_row:
+            if span_width >= min_segment_width:
                 cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
             continue
 
-        if xs.size < min_segment_width:
-            continue
-        x1, x2 = int(xs.min()), int(xs.max())
-        if x2 - x1 < min_segment_width:
-            continue
-        cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
+        gaps = np.where(np.diff(xs) > 1)[0]
+        starts = np.r_[0, gaps + 1]
+        ends = np.r_[gaps, xs.size - 1]
+
+        for start, end in zip(starts, ends):
+            sx1, sx2 = int(xs[start]), int(xs[end])
+            if sx2 - sx1 < min_handle_width:
+                continue
+            cv2.line(body_mask, (sx1, y), (sx2, y), 255, 1)
 
     return body_mask
 
@@ -84,8 +87,9 @@ def detect_gauge_circle(image):
     return best_circle
 
 
-def remove_gauge_circle(body_mask, image):
-    circle = detect_gauge_circle(image)
+def remove_gauge_circle(body_mask, image, circle=None):
+    if circle is None:
+        circle = detect_gauge_circle(image)
     if circle is None:
         return body_mask
 
@@ -100,17 +104,25 @@ def build_red_body_mask(image):
     red1 = cv2.inRange(hsv, np.array([0, 45, 35]), np.array([12, 255, 255]))
     red2 = cv2.inRange(hsv, np.array([165, 45, 35]), np.array([180, 255, 255]))
     red_mask_before_morph = cv2.bitwise_or(red1, red2)
-    body_mask_before_morph = fill_body_rows(red_mask_before_morph, image.shape)
-    body_mask_before_morph = remove_gauge_circle(body_mask_before_morph, image)
+
+    gauge_circle = detect_gauge_circle(image)
+    if gauge_circle is None:
+        fill_from_y = int(image.shape[0] * 0.25)
+    else:
+        _, cy, radius = gauge_circle
+        fill_from_y = int(cy + radius * 1.15)
+
+    body_mask_before_morph = fill_body_rows(red_mask_before_morph, image.shape, fill_from_y)
+    body_mask_before_morph = remove_gauge_circle(body_mask_before_morph, image, gauge_circle)
 
     kernel = np.ones((3, 3), np.uint8)
     red_mask = cv2.morphologyEx(red_mask_before_morph, cv2.MORPH_OPEN, kernel)
     red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-    body_mask = fill_body_rows(red_mask, image.shape)
+    body_mask = fill_body_rows(red_mask, image.shape, fill_from_y)
 
     body_mask = cv2.morphologyEx(body_mask, cv2.MORPH_CLOSE, np.ones((11, 11), np.uint8))
     body_mask = cv2.erode(body_mask, np.ones((3, 3), np.uint8), iterations=1)
-    body_mask = remove_gauge_circle(body_mask, image)
+    body_mask = remove_gauge_circle(body_mask, image, gauge_circle)
     return body_mask, red_mask_before_morph, body_mask_before_morph, red_mask_before_morph
 
 
@@ -400,7 +412,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="HSV + texture corrosion checker for fire extinguisher crops")
     parser.add_argument(
         "--image",
-        default="/home/ltg/ros2_ws/src/tetra/Inspection/capture/inspection/id3/full/fallback_camera1_top_camera2_bottom_20260528_025806.jpg",
+        default="/home/ltg/ros2_ws/src/tetra/Inspection/capture/inspection/id1_inspection/20260527_183135/fire_extinguisher/corrosion_result_01.jpg",
     )
     parser.add_argument("--tile-size", type=int, default=64)
     parser.add_argument("--color-ratio", type=float, default=0.018)
