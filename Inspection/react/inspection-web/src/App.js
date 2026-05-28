@@ -25,6 +25,25 @@ const defaultBringupLogGroups = [
   { id: "apriltag_servo", title: "AprilTag Servo", lines: [] },
 ];
 const regularInspectionLastRunKey = "regularInspectionLastRunKey";
+const localInspectionResultsPath = "/local-inspection-results.json";
+
+const getInspectionRecordKey = (item) => (
+  item.id || `${item.extinguisher_id || "unknown"}-${item.run_id || item.time || ""}`
+);
+
+const mergeInspectionRecords = (firebaseRecords, localRecords) => {
+  const recordsByKey = new Map();
+
+  [...localRecords, ...firebaseRecords].forEach((item) => {
+    recordsByKey.set(getInspectionRecordKey(item), item);
+  });
+
+  return Array.from(recordsByKey.values()).sort((a, b) => {
+    const aTime = new Date(a.time || 0).getTime() || 0;
+    const bTime = new Date(b.time || 0).getTime() || 0;
+    return bTime - aTime;
+  });
+};
 
 function App() {
   const streamHost = window.location.hostname || "localhost";
@@ -32,7 +51,8 @@ function App() {
   const apriltagStreamBaseUrl = `http://${streamHost}:8001`;
   const hardwareControlBaseUrl = `http://${streamHost}:8002`;
   const robotPoseBaseUrl = `http://${streamHost}:8003`;
-  const [data, setData] = useState([]);
+  const [firebaseData, setFirebaseData] = useState([]);
+  const [localData, setLocalData] = useState([]);
   const [activeTab, setActiveTab] = useState("home");
   const [activeMapView, setActiveMapView] = useState("b1f");
   const today = new Date();
@@ -114,6 +134,7 @@ function App() {
     { length: new Date(filterEndYear, filterEndMonth, 0).getDate() },
     (_, index) => index + 1
   );
+  const data = mergeInspectionRecords(firebaseData, localData);
 
   const getItemTime = (item) => {
     if (!item.time) {
@@ -507,7 +528,7 @@ function App() {
           ...doc.data(),
         }));
 
-        setData(result);
+        setFirebaseData(result);
         setSelectedPhotoRecordId((selectedId) => {
           if (!selectedId) {
             return selectedId;
@@ -529,6 +550,36 @@ function App() {
     );
 
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLocalInspectionResults = async () => {
+      try {
+        const response = await fetch(`${localInspectionResultsPath}?t=${Date.now()}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          return;
+        }
+
+        const records = await response.json();
+        if (isMounted && Array.isArray(records)) {
+          setLocalData(records);
+        }
+      } catch (error) {
+        // Firebase remains the primary live source; local JSON is a best-effort fallback.
+      }
+    };
+
+    loadLocalInspectionResults();
+    const intervalId = setInterval(loadLocalInspectionResults, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -771,20 +822,11 @@ function App() {
 
             <aside className="home-command-panel">
               <div className="command-group">
-	                <div className="command-group-title">개별 검사</div>
-	                <div className="command-button-stack">
-	                  <button type="button">EXT1</button>
-	                  <button type="button">EXT2</button>
-	                  <button type="button">EXT3</button>
-	                </div>
-	              </div>
-
-	              <div className="command-group">
-	                <div className="command-group-title">검사 · 복귀</div>
-	                <div className="command-button-stack">
-	                  <button
-	                    className="primary-action"
-	                    type="button"
+                <div className="command-group-title">검사 · 복귀</div>
+                <div className="command-button-stack">
+                  <button
+                    className="primary-action"
+                    type="button"
                     disabled={inspectionRunning}
                     onClick={startInspectionMission}
                   >

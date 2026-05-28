@@ -387,10 +387,10 @@ class MissionManagerProto(MissionManager):
 
         self.capture_started_at = time.time()
         self.wait_for_front_capture()
+        self.stop_inspection_live()
 
         self.set_mission_action(f'EXT{self.target_waypoint} 검사 분석 중')
         pipeline_ok = self.run_inspection_pipeline()
-        self.stop_inspection_live()
 
         if not pipeline_ok:
             return False

@@ -44,6 +44,8 @@ def generate_launch_description():
     use_composition = LaunchConfiguration('use_composition')
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
+    max_vel_theta = LaunchConfiguration('max_vel_theta')
+    acc_lim_theta = LaunchConfiguration('acc_lim_theta')
 
     # Map fully qualified names to relative ones so the node's namespace can be prepended.
     # In case of the transforms (tf), currently, there doesn't seem to be a better alternative
@@ -57,7 +59,9 @@ def generate_launch_description():
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {
         'use_sim_time': use_sim_time,
-        'yaml_filename': map_yaml_file}
+        'yaml_filename': map_yaml_file,
+        'max_vel_theta': max_vel_theta,
+        'acc_lim_theta': acc_lim_theta}
 
     # Only it applys when `use_namespace` is True.
     # '<robot_namespace>' keyword shall be replaced by 'namespace' launch argument
@@ -125,6 +129,16 @@ def generate_launch_description():
         'log_level', default_value='info',
         description='log level')
 
+    declare_max_vel_theta_cmd = DeclareLaunchArgument(
+        'max_vel_theta',
+        default_value='0.6',
+        description='Maximum Nav2 angular velocity in rad/s')
+
+    declare_acc_lim_theta_cmd = DeclareLaunchArgument(
+        'acc_lim_theta',
+        default_value='2.0',
+        description='Maximum Nav2 angular acceleration in rad/s^2')
+
     # Specify the actions
     bringup_cmd_group = GroupAction([
         PushRosNamespace(
@@ -191,6 +205,8 @@ def generate_launch_description():
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_max_vel_theta_cmd)
+    ld.add_action(declare_acc_lim_theta_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(bringup_cmd_group)

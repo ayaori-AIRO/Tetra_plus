@@ -1,0 +1,120 @@
+#!/bin/bash
+set -e
+
+RULE_FILE="/etc/udev/rules.d/tetra_motor.rules"
+MOTOR0_SOURCE="${TETRA_MOTOR0_SOURCE:-/dev/ttyUSB2}"
+MOTOR0_LINKS=("tetra/motor" "tetra/motor0")
+MOTOR1_SOURCE="${TETRA_MOTOR1_SOURCE:-/dev/ttyUSB3}"
+MOTOR1_LINKS=("tetra/motor1")
+LIDAR_SOURCE="${TETRA_LIDAR_SOURCE:-/dev/ttyUSB0}"
+LIDAR_LINKS=("tetra/lidar")
+ST3235_BALLSCREW_SOURCE="${TETRA_ST3235_BALLSCREW_SOURCE:-/dev/ttyUSB1}"
+ST3235_BALLSCREW_LINK="tetra/st3235_ballscrew"
+NEOPIXEL_SOURCE="${TETRA_NEOPIXEL_SOURCE:-/dev/ttyACM0}"
+NEOPIXEL_LINK="tetra/neopixel"
+REALSENSE_SOURCE="${TETRA_REALSENSE_SOURCE:-/dev/video4}"
+TOP_CAMERA_SERIAL="1B7AD4BF"
+BOTTOM_CAMERA_SERIAL="E06DE4BF"
+
+make_tty_rule() {
+  local source_device="$1"
+  local symlink_names_csv="$2"
+  local description="$3"
+  local id_path
+  local rule
+  local symlink_name
+
+  if [ -z "${source_device}" ]; then
+    echo "# ${description}"
+    echo "# Source device is not configured; set the matching TETRA_*_SOURCE variable to enable this link."
+    return
+  fi
+
+  id_path="$(udevadm info --query=property --name="${source_device}" 2>/dev/null | sed -n 's/^ID_PATH=//p' | head -n 1)"
+
+  echo "# ${description}"
+  rule='SUBSYSTEM=="tty", '
+  if [ -n "${id_path}" ]; then
+    echo "# ${source_device}: ID_PATH=${id_path}"
+    rule+="ENV{ID_PATH}==\"${id_path}\", "
+  else
+    echo "# ${source_device}: ID_PATH not available while generating rules; falling back to kernel name."
+    rule+="KERNEL==\"$(basename "${source_device}")\", "
+  fi
+  rule+='MODE="0666", GROUP="dialout"'
+  IFS=',' read -ra symlink_names <<<"${symlink_names_csv}"
+  for symlink_name in "${symlink_names[@]}"; do
+    rule+=", SYMLINK+=\"${symlink_name}\""
+  done
+  echo "${rule}"
+}
+
+join_links() {
+  local IFS=,
+  echo "$*"
+}
+
+make_video_rule() {
+  local serial_short="$1"
+  local symlink_name="$2"
+  local description="$3"
+
+  echo "# ${description}"
+  echo "# ID_SERIAL_SHORT=${serial_short}"
+  echo "SUBSYSTEM==\"video4linux\", ENV{ID_SERIAL_SHORT}==\"${serial_short}\", ENV{ID_V4L_CAPABILITIES}==\":capture:\", MODE=\"0666\", GROUP=\"video\", SYMLINK+=\"${symlink_name}\""
+}
+
+make_realsense_video_rule() {
+  local source_device="$1"
+  local video_index="$2"
+  local symlink_name="$3"
+  local description="$4"
+  local id_path
+
+  id_path="$(udevadm info --query=property --name="${source_device}" 2>/dev/null | sed -n 's/^ID_PATH=//p' | head -n 1)"
+
+  echo "# ${description}"
+  echo "# ${source_device}: RealSense video-index${video_index}"
+  if [ -n "${id_path}" ]; then
+    echo "# ${source_device}: ID_PATH=${id_path}"
+    echo "SUBSYSTEM==\"video4linux\", ENV{ID_VENDOR_ID}==\"8086\", ENV{ID_MODEL_ID}==\"0b5b\", ENV{ID_PATH}==\"${id_path}\", ATTR{index}==\"${video_index}\", MODE=\"0666\", GROUP=\"video\", SYMLINK+=\"${symlink_name}\""
+  else
+    echo "# ${source_device}: ID_PATH not available while generating rules; falling back to RealSense model and video index."
+    echo "SUBSYSTEM==\"video4linux\", ENV{ID_VENDOR_ID}==\"8086\", ENV{ID_MODEL_ID}==\"0b5b\", ATTR{index}==\"${video_index}\", MODE=\"0666\", GROUP=\"video\", SYMLINK+=\"${symlink_name}\""
+  fi
+}
+
+rm -f \
+  /etc/udev/rules.d/tetra_motor.rules \
+  /etc/udev/rules.d/tetra_motor0.rules \
+  /etc/udev/rules.d/tetra_motor1.rules \
+  /etc/udev/rules.d/tetra_lidar.rules \
+  /etc/udev/rules.d/tetra_power.rules
+
+{
+  echo '# TETRA USB serial rules.'
+  make_tty_rule "${MOTOR0_SOURCE}" "$(join_links "${MOTOR0_LINKS[@]}")" "/dev/tetra/motor, /dev/tetra/motor0: TETRA motor controller 0"
+  make_tty_rule "${MOTOR1_SOURCE}" "$(join_links "${MOTOR1_LINKS[@]}")" "/dev/tetra/motor1: TETRA motor controller 1"
+  make_tty_rule "${LIDAR_SOURCE}" "$(join_links "${LIDAR_LINKS[@]}")" "/dev/tetra/lidar: SLLIDAR serial port"
+  make_tty_rule "${ST3235_BALLSCREW_SOURCE}" "${ST3235_BALLSCREW_LINK}" "/dev/${ST3235_BALLSCREW_LINK}: ST3235 and ball screw controller"
+  make_tty_rule "${NEOPIXEL_SOURCE}" "${NEOPIXEL_LINK}" "/dev/${NEOPIXEL_LINK}: Arduino Leonardo NeoPixel controller"
+  make_realsense_video_rule "${REALSENSE_SOURCE}" "0" "tetra/realsense_depth" "/dev/tetra/realsense_depth: Intel RealSense D405 depth stream"
+  make_realsense_video_rule "${REALSENSE_SOURCE}" "1" "tetra/realsense_depth_metadata" "/dev/tetra/realsense_depth_metadata: Intel RealSense D405 depth metadata"
+  make_realsense_video_rule "${REALSENSE_SOURCE}" "2" "tetra/realsense_infrared" "/dev/tetra/realsense_infrared: Intel RealSense D405 infrared stream"
+  make_realsense_video_rule "${REALSENSE_SOURCE}" "3" "tetra/realsense_infrared_metadata" "/dev/tetra/realsense_infrared_metadata: Intel RealSense D405 infrared metadata"
+  make_realsense_video_rule "${REALSENSE_SOURCE}" "4" "tetra/realsense_color" "/dev/tetra/realsense_color: Intel RealSense D405 color stream"
+  make_realsense_video_rule "${REALSENSE_SOURCE}" "5" "tetra/realsense_color_metadata" "/dev/tetra/realsense_color_metadata: Intel RealSense D405 color metadata"
+  make_video_rule "${TOP_CAMERA_SERIAL}" "tetra/top_camera" "/dev/tetra/top_camera: Top Camera"
+  make_video_rule "${BOTTOM_CAMERA_SERIAL}" "tetra/bottom_camera" "/dev/tetra/bottom_camera: Bottom Camera"
+} >"${RULE_FILE}"
+
+udevadm control --reload-rules
+udevadm trigger --subsystem-match=tty
+udevadm trigger --subsystem-match=video4linux
+sleep 1
+
+echo "Generated TETRA USB serial rules:"
+cat "${RULE_FILE}"
+echo
+echo "Current TETRA links:"
+ls -l /dev/tetra/motor /dev/tetra/motor0 /dev/tetra/motor1 /dev/tetra/lidar /dev/tetra/st3235_ballscrew /dev/tetra/neopixel /dev/tetra/realsense_depth /dev/tetra/realsense_depth_metadata /dev/tetra/realsense_infrared /dev/tetra/realsense_infrared_metadata /dev/tetra/realsense_color /dev/tetra/realsense_color_metadata /dev/tetra/top_camera /dev/tetra/bottom_camera 2>/dev/null || true

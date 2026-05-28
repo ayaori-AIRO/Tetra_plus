@@ -1,5 +1,6 @@
 import argparse
 import math
+import os
 import re
 import unicodedata
 from datetime import datetime
@@ -303,6 +304,9 @@ def recognize_crops(rec_session, crops, characters):
 
 
 def get_onnx_providers():
+    if os.environ.get("TETRA_OCR_USE_CUDA", "false").lower() not in ("1", "true", "yes", "on"):
+        return ["CPUExecutionProvider"]
+
     available = ort.get_available_providers()
     preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     return [provider for provider in preferred if provider in available]

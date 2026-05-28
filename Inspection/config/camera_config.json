@@ -1,8 +1,8 @@
 {
     "camera_index_1": "/dev/tetra/top_camera",
     "camera_index_2": "/dev/tetra/bottom_camera",
-    "width": 1280,
-    "height": 720,
-    "fps": 30,
+    "width": 640,
+    "height": 480,
+    "fps": 15,
     "confidence": 0.5
 }

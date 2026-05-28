@@ -20,6 +20,10 @@ CAPTURE_DIR = INSPECTION_DIR / "capture" / "inspection"
 REACT_WEB_DIR = INSPECTION_DIR / "react" / "inspection-web"
 REACT_PUBLIC_RESULT_DIR = REACT_WEB_DIR / "public" / "inspection-results"
 REACT_BUILD_RESULT_DIR = REACT_WEB_DIR / "build" / "inspection-results"
+LOCAL_RESULT_INDEX_FILES = (
+    REACT_WEB_DIR / "public" / "local-inspection-results.json",
+    REACT_WEB_DIR / "build" / "local-inspection-results.json",
+)
 FIREBASE_DIR = INSPECTION_DIR / "react" / "project"
 FIREBASE_KEY = FIREBASE_DIR / "react-test-542ec-firebase-adminsdk-fbsvc-66cefbc805.json"
 
@@ -76,6 +80,41 @@ def publish_result_image(local_path, result_dir):
         shutil.copy2(local_path, build_path)
 
     return f"/inspection-results/{relative_path.as_posix()}"
+
+
+def publish_result_index(data):
+    record = dict(data)
+    record["id"] = f'local-{record.get("extinguisher_id", "unknown")}-{record.get("run_id", record.get("time", ""))}'
+
+    for index_path in LOCAL_RESULT_INDEX_FILES:
+        if index_path.parent.name == "build" and not index_path.parent.exists():
+            continue
+
+        records = []
+        if index_path.exists():
+            try:
+                loaded = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    records = loaded
+            except json.JSONDecodeError:
+                records = []
+
+        records = [
+            item for item in records
+            if item.get("id") != record["id"]
+            and not (
+                item.get("extinguisher_id") == record.get("extinguisher_id")
+                and item.get("run_id") == record.get("run_id")
+            )
+        ]
+        records.append(record)
+        records.sort(key=lambda item: item.get("time", ""), reverse=True)
+
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(
+            json.dumps(records[:200], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
 
 def run_corrosion_for_image(image_path, output_path):
@@ -481,6 +520,7 @@ def inspect_extinguisher(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    publish_result_index(data)
 
     if send_firebase:
         send_to_firebase(data)

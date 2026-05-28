@@ -45,7 +45,7 @@ class MissionManager(Node):
         )
         self.declare_parameter('start_object_detection_after_docking', True)
         self.declare_parameter('object_detection_health_url', 'http://127.0.0.1:8000/health')
-        self.declare_parameter('object_detection_ready_timeout_sec', 15.0)
+        self.declare_parameter('object_detection_ready_timeout_sec', 45.0)
         self.declare_parameter('object_detection_viewer_timeout_sec', 30.0)
         self.declare_parameter('object_detection_capture_timeout_sec', 20.0)
         self.declare_parameter('inspection_side_count', 4)

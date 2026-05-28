@@ -20,10 +20,11 @@ INSPECTION_CAPTURE_DIR = os.path.join(CAPTURE_DIR, "inspection")
 HOST = "0.0.0.0"
 PORT = 8000
 STREAM_FPS = 12
+HEALTH_FRAME_MAX_AGE_SEC = float(os.environ.get("TETRA_HEALTH_FRAME_MAX_AGE_SEC", "5.0"))
 DETECTION_LOG_ENABLED = os.environ.get("TETRA_DETECTION_LOG", "summary").lower()
 DETECTION_LOG_INTERVAL = float(os.environ.get("TETRA_DETECTION_LOG_INTERVAL", "5.0"))
-MIN_FRONT_LABEL_WIDTH = int(os.environ.get("TETRA_MIN_FRONT_LABEL_WIDTH", "220"))
-MIN_FRONT_LABEL_HEIGHT = int(os.environ.get("TETRA_MIN_FRONT_LABEL_HEIGHT", "160"))
+MIN_FRONT_LABEL_WIDTH = int(os.environ.get("TETRA_MIN_FRONT_LABEL_WIDTH", "50"))
+MIN_FRONT_LABEL_HEIGHT = int(os.environ.get("TETRA_MIN_FRONT_LABEL_HEIGHT", "50"))
 VALID_EXTINGUISHER_IDS = {1, 2, 3}
 current_extinguisher_id = int(os.environ.get("TETRA_EXTINGUISHER_ID", "1"))
 
@@ -424,6 +425,15 @@ def detection_loop():
                 time.sleep(0.05)
                 continue
 
+            now = time.time()
+            with frame_lock:
+                latest_raw_frames["camera1"] = frame1.copy()
+                latest_raw_frames["camera2"] = frame2.copy()
+                latest_frames["camera1"] = frame1.copy()
+                latest_frames["camera2"] = frame2.copy()
+                latest_frame_times["camera1"] = now
+                latest_frame_times["camera2"] = now
+
             frames = [frame1, frame2]
             annotated_frames = []
             frame_detections = []
@@ -434,7 +444,7 @@ def detection_loop():
                 for name, model in models.items():
                     results = model(
                         frame,
-                        imgsz=640,
+                        imgsz=416,
                         conf=confidence,
                         verbose=False,
                         device=0,
@@ -501,7 +511,7 @@ def get_stream_health():
     with frame_lock:
         frame_health = {
             camera_name: latest_frames[camera_name] is not None
-            and now - latest_frame_times[camera_name] < 2
+            and now - latest_frame_times[camera_name] < HEALTH_FRAME_MAX_AGE_SEC
             for camera_name in latest_frames
         }
         viewer_health = {
