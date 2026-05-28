@@ -404,24 +404,6 @@ function App() {
     }
   }, [inspectionRunning, robotPoseBaseUrl]);
 
-  const startSingleInspectionMission = useCallback(async (waypoint) => {
-    if (inspectionRunning) {
-      return;
-    }
-
-    try {
-      await fetch(`${robotPoseBaseUrl}/mission/start`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ waypoint }),
-      });
-    } catch (error) {
-      console.error(`EXT${waypoint} mission start request failed:`, error);
-    }
-  }, [inspectionRunning, robotPoseBaseUrl]);
-
   const renderConnectionStatus = (connected) => (
     <div className={`connection-row ${connected ? "connection-row-connected" : ""}`}>
       <span className={`connection-dot ${connected ? "connection-dot-connected" : ""}`} />
@@ -789,31 +771,13 @@ function App() {
 
             <aside className="home-command-panel">
               <div className="command-group">
-                <div className="command-group-title">개별 검사</div>
-                <div className="command-button-stack">
-                  <button
-                    type="button"
-                    disabled={inspectionRunning}
-                    onClick={() => startSingleInspectionMission(1)}
-                  >
-                    EXT1
-                  </button>
-                  <button
-                    type="button"
-                    disabled={inspectionRunning}
-                    onClick={() => startSingleInspectionMission(2)}
-                  >
-                    EXT2
-                  </button>
-                  <button
-                    type="button"
-                    disabled={inspectionRunning}
-                    onClick={() => startSingleInspectionMission(3)}
-                  >
-                    EXT3
-                  </button>
-                </div>
-              </div>
+	                <div className="command-group-title">개별 검사</div>
+	                <div className="command-button-stack">
+	                  <button type="button">EXT1</button>
+	                  <button type="button">EXT2</button>
+	                  <button type="button">EXT3</button>
+	                </div>
+	              </div>
 
 	              <div className="command-group">
 	                <div className="command-group-title">검사 · 복귀</div>

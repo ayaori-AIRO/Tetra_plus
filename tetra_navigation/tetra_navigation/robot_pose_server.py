@@ -17,7 +17,6 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool
 from std_msgs.msg import Empty
-from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 
@@ -58,11 +57,6 @@ class RobotPoseServer(Node):
             10,
         )
         self.mission_start_pub = self.create_publisher(Empty, '/mission/start', 10)
-        self.mission_start_selected_pub = self.create_publisher(
-            String,
-            '/mission/start_selected',
-            10,
-        )
         self.publish_emergency_stop_state()
         self.create_timer(0.1, self.publish_emergency_stop_state)
 
@@ -208,40 +202,8 @@ class RobotPoseServer(Node):
             def do_POST(self):
                 path = urlparse(self.path).path
                 if path == '/mission/start':
-                    length = int(self.headers.get('Content-Length', '0'))
-                    body = self.rfile.read(length).decode('utf-8') if length else '{}'
-                    try:
-                        payload = json.loads(body)
-                    except json.JSONDecodeError:
-                        self.send_json({'ok': False, 'error': 'invalid json'}, status=400)
-                        return
-
-                    waypoint = payload.get('waypoint')
-                    if waypoint is None:
-                        node.mission_start_pub.publish(Empty())
-                        self.send_json({'ok': True, 'mode': 'all'})
-                        return
-
-                    try:
-                        waypoint = int(waypoint)
-                    except (TypeError, ValueError):
-                        self.send_json(
-                            {'ok': False, 'error': 'waypoint must be 1, 2, or 3'},
-                            status=400,
-                        )
-                        return
-
-                    if waypoint not in (1, 2, 3):
-                        self.send_json(
-                            {'ok': False, 'error': 'waypoint must be 1, 2, or 3'},
-                            status=400,
-                        )
-                        return
-
-                    msg = String()
-                    msg.data = str(waypoint)
-                    node.mission_start_selected_pub.publish(msg)
-                    self.send_json({'ok': True, 'mode': 'single', 'waypoint': waypoint})
+                    node.mission_start_pub.publish(Empty())
+                    self.send_json({'ok': True})
                     return
 
                 if path != '/motor_stop':

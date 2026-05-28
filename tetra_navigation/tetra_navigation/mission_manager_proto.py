@@ -25,8 +25,10 @@ class MissionManagerProto(MissionManager):
         self.declare_parameter('forward_speed', 0.03)
         self.declare_parameter('forward_time_allowance_sec', 10.0)
         self.declare_parameter('waypoint2_backup_after_arrival', True)
-        self.declare_parameter('waypoint2_backup_distance', 0.6)
+        self.declare_parameter('waypoint2_backup_distance', 0.65)
         self.declare_parameter('waypoint2_backup_speed', 0.06)
+        self.declare_parameter('waypoint3_backup_distance', 0.6)
+        self.declare_parameter('waypoint3_backup_speed', 0.06)
         self.declare_parameter('waypoint2_forward_after_inspection_distance', 0.5)
         self.declare_parameter('waypoint2_forward_after_inspection_speed', 0.10)
         self.declare_parameter('return_home_after_mission', True)
@@ -38,7 +40,6 @@ class MissionManagerProto(MissionManager):
         self.inspection_waypoints = self.parse_waypoint_sequence(
             self.get_parameter('inspection_waypoints').value
         )
-        self.default_inspection_waypoints = list(self.inspection_waypoints)
         self.forward_after_inspection = bool(
             self.get_parameter('forward_after_inspection').value
         )
@@ -55,6 +56,12 @@ class MissionManagerProto(MissionManager):
         )
         self.waypoint2_backup_speed = float(
             self.get_parameter('waypoint2_backup_speed').value
+        )
+        self.waypoint3_backup_distance = float(
+            self.get_parameter('waypoint3_backup_distance').value
+        )
+        self.waypoint3_backup_speed = float(
+            self.get_parameter('waypoint3_backup_speed').value
         )
         self.waypoint2_forward_after_inspection_distance = float(
             self.get_parameter('waypoint2_forward_after_inspection_distance').value
@@ -78,35 +85,6 @@ class MissionManagerProto(MissionManager):
         self.get_logger().info(
             f'Proto inspection waypoint sequence: {self.inspection_waypoints}'
         )
-
-    def start_mission_callback(self, _msg):
-        if self.mission_thread is not None and self.mission_thread.is_alive():
-            self.get_logger().warn('Mission is already running.')
-            return
-
-        self.inspection_waypoints = list(self.default_inspection_waypoints)
-        self.get_logger().info('Full proto mission requested from UI.')
-        self.start_mission()
-
-    def start_selected_mission_callback(self, msg):
-        if self.mission_thread is not None and self.mission_thread.is_alive():
-            self.get_logger().warn('Mission is already running.')
-            return
-
-        try:
-            waypoint = int(msg.data)
-        except (TypeError, ValueError):
-            self.get_logger().warn(f'Invalid selected proto waypoint: {msg.data}')
-            return
-
-        if waypoint not in (1, 2, 3):
-            self.get_logger().warn(f'Invalid selected proto waypoint: {waypoint}')
-            return
-
-        self.target_waypoint = waypoint
-        self.inspection_waypoints = [waypoint]
-        self.get_logger().info(f'EXT{waypoint} proto mission requested from UI.')
-        self.start_mission()
 
     def run_mission(self):
         self.set_mission_action('Nav2 활성화 대기')
@@ -144,10 +122,16 @@ class MissionManagerProto(MissionManager):
                 self.set_mission_action(f'EXT{waypoint_id} 도착')
 
                 if waypoint_id in (2, 3) and self.waypoint2_backup_after_arrival:
+                    backup_distance = self.waypoint2_backup_distance
+                    backup_speed = self.waypoint2_backup_speed
+                    if waypoint_id == 3:
+                        backup_distance = self.waypoint3_backup_distance
+                        backup_speed = self.waypoint3_backup_speed
+
                     self.set_mission_action(f'EXT{waypoint_id} 충돌 방지 전진')
                     if not self.drive_fixed_distance(
-                        self.waypoint2_backup_distance,
-                        self.waypoint2_backup_speed,
+                        backup_distance,
+                        backup_speed,
                         f'waypoint {waypoint_id} backup after arrival',
                     ):
                         self.get_logger().warn(
