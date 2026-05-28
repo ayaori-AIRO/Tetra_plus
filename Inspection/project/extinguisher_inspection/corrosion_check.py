@@ -11,25 +11,88 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 def fill_body_rows(red_mask, image_shape):
     body_mask = np.zeros(red_mask.shape, dtype=np.uint8)
     min_segment_width = max(12, int(image_shape[1] * 0.04))
+    min_handle_width = max(5, int(image_shape[1] * 0.015))
+    handle_limit_y = int(image_shape[0] * 0.25)
 
     for y in range(red_mask.shape[0]):
         xs = np.where(red_mask[y] > 0)[0]
-        if xs.size < min_segment_width:
+        if xs.size < min_handle_width:
             continue
 
-        gaps = np.where(np.diff(xs) > 1)[0]
-        starts = np.r_[0, gaps + 1]
-        ends = np.r_[gaps, xs.size - 1]
+        if y < handle_limit_y:
+            gaps = np.where(np.diff(xs) > 1)[0]
+            starts = np.r_[0, gaps + 1]
+            ends = np.r_[gaps, xs.size - 1]
 
-        for start, end in zip(starts, ends):
-            x1, x2 = int(xs[start]), int(xs[end])
-            if x2 - x1 < min_segment_width:
-                continue
-            if y > image_shape[0] * 0.78 and x2 - x1 > image_shape[1] * 0.42:
-                continue
-            cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
+            for start, end in zip(starts, ends):
+                x1, x2 = int(xs[start]), int(xs[end])
+                if x2 - x1 < min_handle_width:
+                    continue
+                cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
+            continue
+
+        if xs.size < min_segment_width:
+            continue
+        x1, x2 = int(xs.min()), int(xs.max())
+        if x2 - x1 < min_segment_width:
+            continue
+        cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
 
     return body_mask
+
+
+def detect_gauge_circle(image):
+    h, w = image.shape[:2]
+    roi_h = int(h * 0.32)
+    gray = cv2.cvtColor(image[:roi_h], cv2.COLOR_BGR2GRAY)
+    gray = cv2.medianBlur(gray, 5)
+
+    min_radius = max(10, int(w * 0.045))
+    max_radius = max(min_radius + 5, int(w * 0.18))
+    circles = cv2.HoughCircles(
+        gray,
+        cv2.HOUGH_GRADIENT,
+        dp=1.2,
+        minDist=max(20, min_radius * 2),
+        param1=80,
+        param2=18,
+        minRadius=min_radius,
+        maxRadius=max_radius,
+    )
+    if circles is None:
+        return None
+
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    best_circle = None
+    best_score = None
+    for cx, cy, radius in np.round(circles[0]).astype(int):
+        if cy > roi_h or radius <= 0:
+            continue
+
+        circle_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.circle(circle_mask, (cx, cy), radius, 255, -1)
+        mean_s = cv2.mean(hsv[:, :, 1], mask=circle_mask)[0]
+        center_score = abs(cx - (w * 0.5)) / float(w)
+        height_score = cy / float(max(1, roi_h))
+        color_score = mean_s / 255.0
+        score = center_score + height_score * 0.35 + color_score * 0.45
+
+        if best_score is None or score < best_score:
+            best_score = score
+            best_circle = (cx, cy, radius)
+
+    return best_circle
+
+
+def remove_gauge_circle(body_mask, image):
+    circle = detect_gauge_circle(image)
+    if circle is None:
+        return body_mask
+
+    cx, cy, radius = circle
+    cleaned = body_mask.copy()
+    cv2.circle(cleaned, (cx, cy), int(radius * 1.18), 0, -1)
+    return cleaned
 
 
 def build_red_body_mask(image):
@@ -38,14 +101,17 @@ def build_red_body_mask(image):
     red2 = cv2.inRange(hsv, np.array([165, 45, 35]), np.array([180, 255, 255]))
     red_mask_before_morph = cv2.bitwise_or(red1, red2)
     body_mask_before_morph = fill_body_rows(red_mask_before_morph, image.shape)
+    body_mask_before_morph = remove_gauge_circle(body_mask_before_morph, image)
 
-    kernel = np.ones((9, 9), np.uint8)
+    kernel = np.ones((3, 3), np.uint8)
     red_mask = cv2.morphologyEx(red_mask_before_morph, cv2.MORPH_OPEN, kernel)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
     body_mask = fill_body_rows(red_mask, image.shape)
 
-    body_mask = cv2.morphologyEx(body_mask, cv2.MORPH_CLOSE, np.ones((17, 17), np.uint8))
-    body_mask = cv2.erode(body_mask, np.ones((5, 5), np.uint8), iterations=1)
-    return body_mask, red_mask, body_mask_before_morph, red_mask_before_morph
+    body_mask = cv2.morphologyEx(body_mask, cv2.MORPH_CLOSE, np.ones((11, 11), np.uint8))
+    body_mask = cv2.erode(body_mask, np.ones((3, 3), np.uint8), iterations=1)
+    body_mask = remove_gauge_circle(body_mask, image)
+    return body_mask, red_mask_before_morph, body_mask_before_morph, red_mask_before_morph
 
 
 def build_label_mask(image, body_mask):
@@ -73,21 +139,16 @@ def build_corrosion_color_mask(image, body_mask, red_mask, label_mask):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
 
-    brown_rust = (
-        (h >= 3)
-        & (h <= 35)
-        & (s >= 35)
-        & (v >= 25)
-        & (v <= 190)
-    )
-    dark_damage = (s >= 45) & (v >= 20) & (v <= 135)
-    not_red = red_mask == 0
-    in_body = (body_mask > 0) & (label_mask == 0)
+    # Printed corrosion samples appear as dark red-brown in this camera setup.
+    rust_hue = ((h >= 0) & (h <= 8)) | ((h >= 170) & (h <= 179))
+    rust_sample = rust_hue & (s >= 80) & (v >= 35) & (v <= 130)
+    y_indices = np.indices(body_mask.shape)[0]
+    below_handle = y_indices > int(body_mask.shape[0] * 0.16)
+    in_body = (body_mask > 0) & (label_mask == 0) & below_handle
 
-    mask = ((brown_rust | dark_damage) & not_red & in_body).astype(np.uint8) * 255
+    mask = (rust_sample & in_body).astype(np.uint8) * 255
     mask = cv2.medianBlur(mask, 3)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
     return mask
 
 
@@ -192,11 +253,25 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
         cv2.drawContours(region_mask, [contour], -1, 255, -1)
         tex = texture_score(gray[y:y + h, x:x + w], region_mask[y:y + h, x:x + w])
 
+        inner_body_mask = cv2.erode(body_mask, np.ones((11, 11), np.uint8), iterations=1)
+        region_pixels = max(1, cv2.countNonZero(region_mask))
+        inner_pixels = cv2.countNonZero(cv2.bitwise_and(region_mask, inner_body_mask))
+        inner_ratio = inner_pixels / float(region_pixels)
+
         is_long_band = aspect > 5.0 and h < image.shape[0] * 0.08
         is_edge_streak = touches_body_edge and h > w * 1.8 and area < 900
+        is_edge_sliver = touches_body_edge and aspect < 0.30 and h > 45
+        is_sparse_large_region = area > 500 and fill_ratio < 0.18
+        is_edge_candidate = inner_ratio < 0.45 and area < 1200
         if is_long_band:
             continue
         if is_edge_streak:
+            continue
+        if is_edge_sliver:
+            continue
+        if is_sparse_large_region:
+            continue
+        if is_edge_candidate:
             continue
         if tex < texture_thresh * 0.75:
             continue
@@ -277,7 +352,7 @@ def run_check(args):
         args.small_area,
         args.texture_thresh,
     )
-    final_candidate_mask = cv2.bitwise_or(tile_mask, small_mask)
+    final_candidate_mask = candidate_mask
     regions = find_corrosion_regions(final_candidate_mask, body_mask, args.min_area, args.texture_thresh, image)
     region_mask = build_region_mask(final_candidate_mask.shape, regions)
 
@@ -325,12 +400,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description="HSV + texture corrosion checker for fire extinguisher crops")
     parser.add_argument(
         "--image",
-        default="/home/ayaori/ros2_ws/src/tetra/Inspection/capture/Real_Environment/corrosion/corrosion_2.png",
+        default="/home/ltg/ros2_ws/src/tetra/Inspection/capture/inspection/id3/full/fallback_camera1_top_camera2_bottom_20260528_025806.jpg",
     )
     parser.add_argument("--tile-size", type=int, default=64)
     parser.add_argument("--color-ratio", type=float, default=0.018)
-    parser.add_argument("--texture-thresh", type=float, default=18.0)
-    parser.add_argument("--min-area", type=float, default=35.0)
+    parser.add_argument("--texture-thresh", type=float, default=8.0)
+    parser.add_argument("--min-area", type=float, default=200.0)
     parser.add_argument("--small-area", type=float, default=12.0)
     parser.add_argument("--display-scale", type=float, default=0.6)
     parser.add_argument("--no-show", action="store_true")
