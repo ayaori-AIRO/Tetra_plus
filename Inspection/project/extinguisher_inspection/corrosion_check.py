@@ -412,7 +412,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="HSV + texture corrosion checker for fire extinguisher crops")
     parser.add_argument(
         "--image",
-        default="/home/ltg/ros2_ws/src/tetra/Inspection/capture/inspection/id1_inspection/20260527_183135/fire_extinguisher/corrosion_result_01.jpg",
+        default="/home/ayaori/ros2_ws/src/tetra/Inspection/capture/inspection/id3/full/fallback_camera1_top_camera2_bottom_20260528_025806.jpg",
     )
     parser.add_argument("--tile-size", type=int, default=64)
     parser.add_argument("--color-ratio", type=float, default=0.018)

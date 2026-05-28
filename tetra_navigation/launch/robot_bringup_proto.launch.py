@@ -61,12 +61,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'home_x',
-            default_value='15.80',
+            default_value='0.0',
             description='Home pose x in map frame.',
         ),
         DeclareLaunchArgument(
             'home_y',
-            default_value='0.07',
+            default_value='0.0',
             description='Home pose y in map frame.',
         ),
         DeclareLaunchArgument(

@@ -448,6 +448,13 @@ h1 {
   border-color: #15803d;
 }
 
+.hardware-section-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  margin: 8px 0 4px;
+  background: #b8c6d1;
+}
+
 .neopixel-slider {
   width: 130px;
 }
@@ -1387,6 +1394,72 @@ h2 {
   line-height: 1.7;
 }
 
+.full-log-panel {
+  width: 100%;
+  min-height: 520px;
+  max-height: 650px;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #101827;
+  color: #d7dee8;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.8;
+  box-sizing: border-box;
+}
+
+.full-log-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 24px;
+  align-items: start;
+}
+
+.full-log-row span:first-child {
+  color: #93c5fd;
+}
+
+.bringup-log-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  width: 100%;
+  min-height: calc(100vh - 150px);
+}
+
+.bringup-log-card {
+  min-width: 0;
+}
+
+.bringup-log-title {
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.bringup-log-card .full-log-panel {
+  min-height: clamp(280px, calc((100vh - 230px) / 3), 420px);
+  max-height: none;
+  height: clamp(280px, calc((100vh - 230px) / 3), 420px);
+  padding: 16px 18px;
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+.bringup-log-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bringup-log-line.muted {
+  color: #94a3b8;
+}
+
 .home-command-panel {
   display: flex;
   flex-direction: column;
@@ -1482,6 +1555,10 @@ h2 {
   gap: 8px;
 }
 
+.schedule-controls-locked {
+  opacity: 0.6;
+}
+
 .schedule-controls label {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -1503,6 +1580,24 @@ h2 {
   padding: 0 8px;
   font-size: 13px;
   font-weight: 700;
+}
+
+.schedule-toggle-button:disabled,
+.schedule-toggle-button:disabled:hover,
+.schedule-save-button:disabled,
+.schedule-save-button:disabled:hover,
+.schedule-controls select:disabled,
+.schedule-controls input:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.55);
+  opacity: 0.68;
+}
+
+.schedule-lock-message {
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .schedule-save-button {
@@ -1653,6 +1748,13 @@ h2 {
 .connection-dot-connected {
   background: #22c55e;
   box-shadow: 0 0 10px rgba(34, 197, 94, 0.55);
+}
+
+.hardware-section-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  margin: 12px 0 8px;
+  background: var(--line);
 }
 
 .neopixel-slider {

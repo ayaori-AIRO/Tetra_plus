@@ -11,7 +11,7 @@ SAFE_ANGLE_MIN = 60
 SAFE_ANGLE_MAX = 120
 
 gauge_img = cv2.imread(
-    "/home/ltg/ros2_ws/src/tetra/Inspection/capture/Real_Environment/pressure_gauge/camera1_pressure_gauge_20260507_011409_1.jpg"
+    "/home/ayaori/ros2_ws/src/tetra/Inspection/capture/Real_Environment/pressure_gauge/camera1_pressure_gauge_20260507_011409_1.jpg"
 )
 if gauge_img is None:
     print("[gauge_debug] 이미지를 불러올 수 없습니다.")

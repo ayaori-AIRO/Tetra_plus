@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "./firebase";
 import "./App.css";
@@ -15,6 +15,16 @@ const getStoredRegularInspectionSchedule = () => {
     return null;
   }
 };
+
+const defaultBringupLogGroups = [
+  { id: "tetra", title: "TETRA / 모터", lines: [] },
+  { id: "lidar", title: "LiDAR", lines: [] },
+  { id: "nav2", title: "Nav2 / Localization", lines: [] },
+  { id: "rviz", title: "RViz", lines: [] },
+  { id: "realsense", title: "RealSense", lines: [] },
+  { id: "apriltag_servo", title: "AprilTag Servo", lines: [] },
+];
+const regularInspectionLastRunKey = "regularInspectionLastRunKey";
 
 function App() {
   const streamHost = window.location.hostname || "localhost";
@@ -68,6 +78,7 @@ function App() {
   });
   const [inspectionRunning, setInspectionRunning] = useState(false);
   const [missionLogs, setMissionLogs] = useState([]);
+  const [bringupLogGroups, setBringupLogGroups] = useState(defaultBringupLogGroups);
   const [emergencyStopActive, setEmergencyStopActive] = useState(false);
   const [liveConnected, setLiveConnected] = useState({
     apriltag: false,
@@ -167,6 +178,10 @@ function App() {
   };
 
   const saveRegularInspectionSchedule = () => {
+    if (inspectionRunning) {
+      return;
+    }
+
     const schedule = {
       day: Number(scheduleDay),
       time: scheduleTime,
@@ -174,6 +189,7 @@ function App() {
 
     setRegularInspectionSchedule(schedule);
     window.localStorage.setItem("regularInspectionSchedule", JSON.stringify(schedule));
+    window.localStorage.removeItem(regularInspectionLastRunKey);
     setIsSchedulePanelOpen(false);
   };
 
@@ -374,7 +390,7 @@ function App() {
     setEmergencyMotorStop(!emergencyStopActive);
   };
 
-  const startInspectionMission = async () => {
+  const startInspectionMission = useCallback(async () => {
     if (inspectionRunning) {
       return;
     }
@@ -386,7 +402,25 @@ function App() {
     } catch (error) {
       console.error("Mission start request failed:", error);
     }
-  };
+  }, [inspectionRunning, robotPoseBaseUrl]);
+
+  const startSingleInspectionMission = useCallback(async (waypoint) => {
+    if (inspectionRunning) {
+      return;
+    }
+
+    try {
+      await fetch(`${robotPoseBaseUrl}/mission/start`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ waypoint }),
+      });
+    } catch (error) {
+      console.error(`EXT${waypoint} mission start request failed:`, error);
+    }
+  }, [inspectionRunning, robotPoseBaseUrl]);
 
   const renderConnectionStatus = (connected) => (
     <div className={`connection-row ${connected ? "connection-row-connected" : ""}`}>
@@ -394,6 +428,36 @@ function App() {
       <span>{connected ? "연결 완료" : "연결 안됨"}</span>
     </div>
   );
+
+  useEffect(() => {
+    if (!regularInspectionSchedule) {
+      return undefined;
+    }
+
+    const checkRegularInspectionSchedule = () => {
+      if (inspectionRunning) {
+        return;
+      }
+
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      if (now.getDate() !== Number(regularInspectionSchedule.day) || currentTime !== regularInspectionSchedule.time) {
+        return;
+      }
+
+      const runKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${regularInspectionSchedule.time}`;
+      if (window.localStorage.getItem(regularInspectionLastRunKey) === runKey) {
+        return;
+      }
+
+      window.localStorage.setItem(regularInspectionLastRunKey, runKey);
+      startInspectionMission();
+    };
+
+    checkRegularInspectionSchedule();
+    const intervalId = setInterval(checkRegularInspectionSchedule, 1000);
+    return () => clearInterval(intervalId);
+  }, [regularInspectionSchedule, inspectionRunning, startInspectionMission]);
 
   useEffect(() => {
     let isMounted = true;
@@ -426,6 +490,15 @@ function App() {
         }
       } catch (error) {
         console.error("NeoPixel state load failed:", error);
+        if (isMounted) {
+          setHardwareConnected({
+            ballscrew: false,
+            st3235: false,
+            neopixel: false,
+            tetraMotor: false,
+            lidar: false,
+          });
+        }
       }
     };
 
@@ -504,8 +577,8 @@ function App() {
         const health = await response.json();
         setLiveConnected((prev) => ({
           ...prev,
-          camera1: prev.camera1 && Boolean(health.camera1),
-          camera2: prev.camera2 && Boolean(health.camera2),
+          camera1: Boolean(health.camera1),
+          camera2: Boolean(health.camera2),
         }));
 
         if (!health.camera1 || !health.camera2) {
@@ -600,6 +673,38 @@ function App() {
   }, [robotPoseBaseUrl]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadBringupLogs = async () => {
+      try {
+        const response = await fetch(`${robotPoseBaseUrl}/logs/bringup`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("bringup log request failed");
+        }
+
+        const payload = await response.json();
+        if (isMounted && Array.isArray(payload.groups)) {
+          setBringupLogGroups(payload.groups);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setBringupLogGroups(defaultBringupLogGroups);
+        }
+      }
+    };
+
+    loadBringupLogs();
+    const intervalId = setInterval(loadBringupLogs, 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [robotPoseBaseUrl]);
+
+  useEffect(() => {
     if (activeMapView !== "live" || liveMapLoaded) {
       return undefined;
     }
@@ -686,19 +791,36 @@ function App() {
               <div className="command-group">
                 <div className="command-group-title">개별 검사</div>
                 <div className="command-button-stack">
-                  <button type="button">EXT1</button>
-                  <button type="button">EXT2</button>
-                  <button type="button">EXT3</button>
+                  <button
+                    type="button"
+                    disabled={inspectionRunning}
+                    onClick={() => startSingleInspectionMission(1)}
+                  >
+                    EXT1
+                  </button>
+                  <button
+                    type="button"
+                    disabled={inspectionRunning}
+                    onClick={() => startSingleInspectionMission(2)}
+                  >
+                    EXT2
+                  </button>
+                  <button
+                    type="button"
+                    disabled={inspectionRunning}
+                    onClick={() => startSingleInspectionMission(3)}
+                  >
+                    EXT3
+                  </button>
                 </div>
               </div>
 
-              <div className="command-group">
-                <div className="command-group-title">검사 · 복귀</div>
-                <div className="command-button-stack">
-                  <button className="secondary-action" type="button">홈 위치</button>
-                  <button
-                    className="primary-action"
-                    type="button"
+	              <div className="command-group">
+	                <div className="command-group-title">검사 · 복귀</div>
+	                <div className="command-button-stack">
+	                  <button
+	                    className="primary-action"
+	                    type="button"
                     disabled={inspectionRunning}
                     onClick={startInspectionMission}
                   >
@@ -713,7 +835,13 @@ function App() {
                   <button
                     className="schedule-toggle-button"
                     type="button"
-                    onClick={() => setIsSchedulePanelOpen((isOpen) => !isOpen)}
+                    disabled={inspectionRunning}
+                    onClick={() => {
+                      if (inspectionRunning) {
+                        return;
+                      }
+                      setIsSchedulePanelOpen((isOpen) => !isOpen);
+                    }}
                   >
                     정기검사예약
                   </button>
@@ -722,12 +850,14 @@ function App() {
                       ? `매월 ${regularInspectionSchedule.day}일 ${regularInspectionSchedule.time}`
                       : "예약 없음"}
                   </div>
+                  {inspectionRunning && <small className="schedule-lock-message">검사 중 예약 변경 잠김</small>}
                   {isSchedulePanelOpen && (
-                    <div className="schedule-controls">
+                    <div className={`schedule-controls ${inspectionRunning ? "schedule-controls-locked" : ""}`}>
                       <label>
                         <span>매월</span>
                         <select
                           value={scheduleDay}
+                          disabled={inspectionRunning}
                           onChange={(event) => setScheduleDay(Number(event.target.value))}
                         >
                           {scheduleDayOptions.map((day) => (
@@ -742,12 +872,14 @@ function App() {
                         <input
                           type="time"
                           value={scheduleTime}
+                          disabled={inspectionRunning}
                           onChange={(event) => setScheduleTime(event.target.value)}
                         />
                       </label>
                       <button
                         className="schedule-save-button"
                         type="button"
+                        disabled={inspectionRunning}
                         onClick={saveRegularInspectionSchedule}
                       >
                         예약 저장
@@ -816,6 +948,14 @@ function App() {
           <div className="tab-content">
             <div className="hardware-status-list">
               <div className="hardware-status-card">
+                <span>테트라 모터</span>
+                {renderConnectionStatus(hardwareConnected.tetraMotor)}
+              </div>
+              <div className="hardware-status-card">
+                <span>LiDAR</span>
+                {renderConnectionStatus(hardwareConnected.lidar)}
+              </div>
+              <div className="hardware-status-card">
                 <span>상하 이동 모듈</span>
                 {renderConnectionStatus(hardwareConnected.ballscrew)}
               </div>
@@ -832,17 +972,14 @@ function App() {
                 {renderConnectionStatus(liveConnected.camera2)}
               </div>
               <div className="hardware-status-card">
-                <span>테트라 모터</span>
-                {renderConnectionStatus(hardwareConnected.tetraMotor)}
-              </div>
-              <div className="hardware-status-card">
-                <span>LiDAR</span>
-                {renderConnectionStatus(hardwareConnected.lidar)}
+                <span>자동정렬 카메라</span>
+                {renderConnectionStatus(liveConnected.apriltag)}
               </div>
               <div className="hardware-status-card">
                 <span>NeoPixel LED</span>
                 {renderConnectionStatus(hardwareConnected.neopixel)}
               </div>
+              <div className="hardware-section-divider" />
               <div className="hardware-status-card">
                 <span>LED(소화기 내부)</span>
                 <div className={`neopixel-control ${inspectionRunning ? "neopixel-control-locked" : ""}`}>
@@ -875,6 +1012,30 @@ function App() {
                 </div>
                 {inspectionRunning && <small className="neopixel-lock-message">검사 중 LED 조정 잠김</small>}
               </div>
+            </div>
+          </div>
+        );
+
+      case "log":
+        return (
+          <div className="tab-content">
+            <div className="bringup-log-grid">
+              {bringupLogGroups.map((group) => (
+                <section className="bringup-log-card" key={group.id}>
+                  <div className="bringup-log-title">{group.title}</div>
+                  <div className="full-log-panel">
+                    {group.lines?.length > 0 ? (
+                      group.lines.map((line, index) => (
+                        <div className="bringup-log-line" key={`${group.id}-${index}`}>
+                          {line}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="bringup-log-line muted">로그 없음</div>
+                    )}
+                  </div>
+                </section>
+              ))}
             </div>
           </div>
         );
@@ -1178,6 +1339,13 @@ function App() {
                 onClick={() => setActiveTab("hardware")}
               >
                 Hardware
+              </button>
+
+              <button
+                className={`tab-button ${activeTab === "log" ? "active" : ""}`}
+                onClick={() => setActiveTab("log")}
+              >
+                Log
               </button>
             </div>
 

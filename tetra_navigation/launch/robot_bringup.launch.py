@@ -4,17 +4,14 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    tetra_share = get_package_share_directory('tetra')
     tetra_navigation_share = get_package_share_directory('tetra_navigation')
-    realsense_share = get_package_share_directory('realsense2_camera')
 
     use_react = LaunchConfiguration('use_react')
     react_dir = LaunchConfiguration('react_dir')
@@ -47,44 +44,78 @@ def generate_launch_description():
         'tags_36h11_tetra.yaml'
     )
 
-    tetra_configuration = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(tetra_share, 'launch', 'tetra_configuration.launch.py')
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-        }.items()
+    tetra_configuration = ExecuteProcess(
+        cmd=[
+            'bash',
+            '-lc',
+            (
+                'mkdir -p /tmp/tetra_ui_logs; '
+                ': > /tmp/tetra_ui_logs/tetra_configuration.log; '
+                'ros2 launch tetra tetra_configuration.launch.py '
+                '2>&1 | tee -a /tmp/tetra_ui_logs/tetra_configuration.log'
+            ),
+        ],
+        output='screen',
     )
 
-    lidar = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(tetra_navigation_share, 'launch', 'view_sllidar_a2m12_launch.py')
-        )
+    lidar = ExecuteProcess(
+        cmd=[
+            'bash',
+            '-lc',
+            (
+                'mkdir -p /tmp/tetra_ui_logs; '
+                ': > /tmp/tetra_ui_logs/lidar.log; '
+                'ros2 launch tetra_navigation view_sllidar_a2m12_launch.py '
+                '2>&1 | tee -a /tmp/tetra_ui_logs/lidar.log'
+            ),
+        ],
+        output='screen',
     )
 
-    nav2_bringup = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(tetra_navigation_share, 'launch', 'bringup_launch.py')
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-        }.items()
+    nav2_bringup = ExecuteProcess(
+        cmd=[
+            'bash',
+            '-lc',
+            (
+                'mkdir -p /tmp/tetra_ui_logs; '
+                ': > /tmp/tetra_ui_logs/nav2.log; '
+                'ros2 launch tetra_navigation bringup_launch.py use_sim_time:=$USE_SIM_TIME '
+                '2>&1 | tee -a /tmp/tetra_ui_logs/nav2.log'
+            ),
+        ],
+        output='screen',
+        additional_env={
+            'USE_SIM_TIME': use_sim_time,
+        },
     )
 
-    rviz = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(tetra_navigation_share, 'launch', 'rviz_launch.py')
-        ),
+    rviz = ExecuteProcess(
+        cmd=[
+            'bash',
+            '-lc',
+            (
+                'mkdir -p /tmp/tetra_ui_logs; '
+                ': > /tmp/tetra_ui_logs/rviz.log; '
+                'ros2 launch tetra_navigation rviz_launch.py '
+                '2>&1 | tee -a /tmp/tetra_ui_logs/rviz.log'
+            ),
+        ],
+        output='screen',
         condition=IfCondition(use_rviz)
     )
 
-    realsense = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(realsense_share, 'launch', 'rs_launch.py')
-        ),
-        launch_arguments={
-            'publish_tf': 'false',
-        }.items(),
+    realsense = ExecuteProcess(
+        cmd=[
+            'bash',
+            '-lc',
+            (
+                'mkdir -p /tmp/tetra_ui_logs; '
+                ': > /tmp/tetra_ui_logs/realsense.log; '
+                'ros2 launch realsense2_camera rs_launch.py publish_tf:=false '
+                '2>&1 | tee -a /tmp/tetra_ui_logs/realsense.log'
+            ),
+        ],
+        output='screen',
         condition=IfCondition(use_realsense)
     )
 
@@ -132,30 +163,38 @@ def generate_launch_description():
         output='screen',
     )
 
-    apriltag_servo = Node(
-        package='tetra_navigation',
-        executable='apriltag_servo',
-        name='apriltag_servo',
+    apriltag_servo = ExecuteProcess(
+        cmd=[
+            'bash',
+            '-lc',
+            (
+                'mkdir -p /tmp/tetra_ui_logs; '
+                ': > /tmp/tetra_ui_logs/apriltag_servo.log; '
+                'ros2 run tetra_navigation apriltag_servo --ros-args '
+                '-p tag_id:=10 '
+                '-p tag_size:=0.10 '
+                '-p target_distance:=0.4 '
+                '-p mid_tag_id:=9 '
+                '-p mid_tag_size:=0.05 '
+                '-p mid_target_distance:=0.2 '
+                '-p near_tag_id:=1 '
+                '-p near_tag_ids:="[1, 2, 3]" '
+                '-p near_tag_size:=0.01 '
+                '-p switch_distance:=0.45 '
+                '-p near_switch_distance:=0.25 '
+                '-p near_target_distance:=0.03 '
+                '-p distance_tolerance:=0.007 '
+                '-p min_linear_speed:=0.003 '
+                '-p cmd_vel_topic:=/cmd_vel_servo '
+                '-p stop_after_reached:=false '
+                '-p enabled:=$SERVO_ENABLED '
+                '2>&1 | tee -a /tmp/tetra_ui_logs/apriltag_servo.log'
+            ),
+        ],
         output='screen',
-        parameters=[{
-            'tag_id': 10,
-            'tag_size': 0.10,
-            'target_distance': 0.4,
-            'mid_tag_id': 9,
-            'mid_tag_size': 0.05,
-            'mid_target_distance': 0.2,
-            'near_tag_id': 1,
-            'near_tag_ids': [1, 2, 3],
-            'near_tag_size': 0.01,
-            'switch_distance': 0.45,
-            'near_switch_distance': 0.25,
-            'near_target_distance': 0.03,
-            'distance_tolerance': 0.007,
-            'min_linear_speed': 0.003,
-            'cmd_vel_topic': '/cmd_vel_servo',
-            'stop_after_reached': False,
-            'enabled': servo_enabled,
-        }],
+        additional_env={
+            'SERVO_ENABLED': servo_enabled,
+        },
         condition=IfCondition(use_servo),
     )
 

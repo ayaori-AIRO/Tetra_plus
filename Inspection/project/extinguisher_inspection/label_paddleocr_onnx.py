@@ -354,7 +354,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--image",
-        default="/home/ltg/ros2_ws/src/tetra/Inspection/capture/inspection/label/camera1_20260524_012222_96.jpg",
+        default="/home/ayaori/ros2_ws/src/tetra/Inspection/capture/inspection/label/camera1_20260524_012222_96.jpg",
     )
     parser.add_argument(
         "--det-model",

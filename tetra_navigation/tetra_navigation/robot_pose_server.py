@@ -17,6 +17,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool
 from std_msgs.msg import Empty
+from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 
@@ -57,6 +58,11 @@ class RobotPoseServer(Node):
             10,
         )
         self.mission_start_pub = self.create_publisher(Empty, '/mission/start', 10)
+        self.mission_start_selected_pub = self.create_publisher(
+            String,
+            '/mission/start_selected',
+            10,
+        )
         self.publish_emergency_stop_state()
         self.create_timer(0.1, self.publish_emergency_stop_state)
 
@@ -193,13 +199,49 @@ class RobotPoseServer(Node):
                     self.send_bytes('image/png', node.map_png)
                     return
 
+                if path == '/logs/bringup':
+                    self.send_json(node.get_bringup_logs())
+                    return
+
                 self.send_error(404)
 
             def do_POST(self):
                 path = urlparse(self.path).path
                 if path == '/mission/start':
-                    node.mission_start_pub.publish(Empty())
-                    self.send_json({'ok': True})
+                    length = int(self.headers.get('Content-Length', '0'))
+                    body = self.rfile.read(length).decode('utf-8') if length else '{}'
+                    try:
+                        payload = json.loads(body)
+                    except json.JSONDecodeError:
+                        self.send_json({'ok': False, 'error': 'invalid json'}, status=400)
+                        return
+
+                    waypoint = payload.get('waypoint')
+                    if waypoint is None:
+                        node.mission_start_pub.publish(Empty())
+                        self.send_json({'ok': True, 'mode': 'all'})
+                        return
+
+                    try:
+                        waypoint = int(waypoint)
+                    except (TypeError, ValueError):
+                        self.send_json(
+                            {'ok': False, 'error': 'waypoint must be 1, 2, or 3'},
+                            status=400,
+                        )
+                        return
+
+                    if waypoint not in (1, 2, 3):
+                        self.send_json(
+                            {'ok': False, 'error': 'waypoint must be 1, 2, or 3'},
+                            status=400,
+                        )
+                        return
+
+                    msg = String()
+                    msg.data = str(waypoint)
+                    node.mission_start_selected_pub.publish(msg)
+                    self.send_json({'ok': True, 'mode': 'single', 'waypoint': waypoint})
                     return
 
                 if path != '/motor_stop':
@@ -253,6 +295,73 @@ class RobotPoseServer(Node):
                 return
 
         return RobotPoseHandler
+
+    def get_bringup_logs(self):
+        log_dir = '/tmp/tetra_ui_logs'
+        groups = self.empty_log_groups()
+
+        if not os.path.isdir(log_dir):
+            return {
+                'ok': False,
+                'log_dir': '',
+                'groups': list(groups.values()),
+            }
+
+        for group in groups.values():
+            file_path = os.path.join(log_dir, group['file'])
+            group.pop('file', None)
+            if not os.path.isfile(file_path):
+                continue
+
+            for line in self.tail_text_lines(file_path):
+                clean_line = line.rstrip()
+                if not clean_line:
+                    continue
+                group['lines'].append(clean_line)
+
+        for group in groups.values():
+            group['lines'] = group['lines'][-500:]
+
+        return {
+            'ok': True,
+            'log_dir': log_dir,
+            'groups': list(groups.values()),
+            'updated_at': time.time(),
+        }
+
+    @staticmethod
+    def empty_log_groups():
+        definitions = [
+            ('tetra', 'TETRA / 모터', 'tetra_configuration.log'),
+            ('lidar', 'LiDAR', 'lidar.log'),
+            ('nav2', 'Nav2 / Localization', 'nav2.log'),
+            ('rviz', 'RViz', 'rviz.log'),
+            ('realsense', 'RealSense', 'realsense.log'),
+            ('apriltag_servo', 'AprilTag Servo', 'apriltag_servo.log'),
+        ]
+        return {
+            group_id: {
+                'id': group_id,
+                'title': title,
+                'file': filename,
+                'lines': [],
+            }
+            for group_id, title, filename in definitions
+        }
+
+    @staticmethod
+    def tail_text_lines(file_path, max_bytes=350000):
+        try:
+            file_size = os.path.getsize(file_path)
+            with open(file_path, 'rb') as log_file:
+                if file_size > max_bytes:
+                    log_file.seek(-max_bytes, os.SEEK_END)
+                    log_file.readline()
+                data = log_file.read()
+        except OSError:
+            return []
+
+        return data.decode('utf-8', errors='replace').splitlines()
 
     @staticmethod
     def load_map_info(map_yaml):

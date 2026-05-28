@@ -38,6 +38,7 @@ class MissionManagerProto(MissionManager):
         self.inspection_waypoints = self.parse_waypoint_sequence(
             self.get_parameter('inspection_waypoints').value
         )
+        self.default_inspection_waypoints = list(self.inspection_waypoints)
         self.forward_after_inspection = bool(
             self.get_parameter('forward_after_inspection').value
         )
@@ -77,6 +78,35 @@ class MissionManagerProto(MissionManager):
         self.get_logger().info(
             f'Proto inspection waypoint sequence: {self.inspection_waypoints}'
         )
+
+    def start_mission_callback(self, _msg):
+        if self.mission_thread is not None and self.mission_thread.is_alive():
+            self.get_logger().warn('Mission is already running.')
+            return
+
+        self.inspection_waypoints = list(self.default_inspection_waypoints)
+        self.get_logger().info('Full proto mission requested from UI.')
+        self.start_mission()
+
+    def start_selected_mission_callback(self, msg):
+        if self.mission_thread is not None and self.mission_thread.is_alive():
+            self.get_logger().warn('Mission is already running.')
+            return
+
+        try:
+            waypoint = int(msg.data)
+        except (TypeError, ValueError):
+            self.get_logger().warn(f'Invalid selected proto waypoint: {msg.data}')
+            return
+
+        if waypoint not in (1, 2, 3):
+            self.get_logger().warn(f'Invalid selected proto waypoint: {waypoint}')
+            return
+
+        self.target_waypoint = waypoint
+        self.inspection_waypoints = [waypoint]
+        self.get_logger().info(f'EXT{waypoint} proto mission requested from UI.')
+        self.start_mission()
 
     def run_mission(self):
         self.set_mission_action('Nav2 활성화 대기')

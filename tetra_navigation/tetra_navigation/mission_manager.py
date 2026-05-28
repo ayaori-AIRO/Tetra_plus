@@ -98,6 +98,12 @@ class MissionManager(Node):
         self.dock_client = ActionClient(self, DockToTag, 'dock_to_tag')
         self.cmd_vel_select_pub = self.create_publisher(String, '/cmd_vel_mux/select', 10)
         self.create_subscription(Empty, '/mission/start', self.start_mission_callback, 10)
+        self.create_subscription(
+            String,
+            '/mission/start_selected',
+            self.start_selected_mission_callback,
+            10,
+        )
         self.start_timer = None
         self.mission_thread = None
         self.object_detection_process = None
@@ -121,6 +127,25 @@ class MissionManager(Node):
 
     def start_mission_callback(self, _msg):
         self.get_logger().info('Mission start requested from UI.')
+        self.start_mission()
+
+    def start_selected_mission_callback(self, msg):
+        if self.mission_thread is not None and self.mission_thread.is_alive():
+            self.get_logger().warn('Mission is already running.')
+            return
+
+        try:
+            waypoint = int(msg.data)
+        except (TypeError, ValueError):
+            self.get_logger().warn(f'Invalid selected mission waypoint: {msg.data}')
+            return
+
+        if waypoint not in (1, 2, 3):
+            self.get_logger().warn(f'Invalid selected mission waypoint: {waypoint}')
+            return
+
+        self.target_waypoint = waypoint
+        self.get_logger().info(f'EXT{waypoint} mission requested from UI.')
         self.start_mission()
 
     def reset_inspection_status_on_startup(self):
