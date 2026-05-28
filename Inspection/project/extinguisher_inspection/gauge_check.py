@@ -9,6 +9,78 @@ import math
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAFE_ANGLE_MIN = 60
 SAFE_ANGLE_MAX = 120
+MIN_NEEDLE_MASK_PIXELS = 5
+MIN_NEEDLE_CONTOUR_AREA = 1.0
+MIN_NEEDLE_ASPECT_RATIO = 1.2
+MIN_NEEDLE_RADIUS_RATIO = 0.8
+MAX_NEEDLE_GREEN_OVERLAP_RATIO = 0.25
+
+
+def choose_needle_mask(hsv, clean_green, center, processing_radius):
+    needle_ranges = [
+        (np.array([0, 10, 10]), np.array([40, 255, 255])),
+        (np.array([140, 10, 10]), np.array([180, 255, 255])),
+        (np.array([105, 60, 50]), np.array([135, 255, 210])),
+        (np.array([150, 70, 120]), np.array([170, 255, 255])),
+    ]
+    best_mask = None
+    best_score = 0.0
+    morphology_kernel = np.ones((3, 3), np.uint8)
+    min_tip_distance = max(8.0, processing_radius * MIN_NEEDLE_RADIUS_RATIO)
+
+    for lower, upper in needle_ranges:
+        candidate_mask = cv2.inRange(hsv, lower, upper)
+        candidate_mask = cv2.morphologyEx(
+            candidate_mask,
+            cv2.MORPH_CLOSE,
+            morphology_kernel,
+        )
+        if cv2.countNonZero(candidate_mask) < MIN_NEEDLE_MASK_PIXELS:
+            continue
+
+        contours, _ = cv2.findContours(
+            candidate_mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+        if not contours:
+            continue
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < MIN_NEEDLE_CONTOUR_AREA:
+                continue
+
+            rect = cv2.minAreaRect(contour)
+            rect_width, rect_height = rect[1]
+            long_side = max(rect_width, rect_height)
+            short_side = max(1e-6, min(rect_width, rect_height))
+            aspect_ratio = long_side / short_side
+            if aspect_ratio < MIN_NEEDLE_ASPECT_RATIO:
+                continue
+
+            points = contour.reshape(-1, 2)
+            distances = np.sqrt(
+                (points[:, 0] - center[0]) ** 2
+                + (points[:, 1] - center[1]) ** 2
+            )
+            max_distance = float(distances.max()) if distances.size else 0.0
+            if max_distance < min_tip_distance:
+                continue
+
+            contour_mask = np.zeros(candidate_mask.shape, dtype=np.uint8)
+            cv2.drawContours(contour_mask, [contour], -1, 255, -1)
+            overlap = cv2.countNonZero(cv2.bitwise_and(contour_mask, clean_green))
+            overlap_ratio = overlap / max(1, cv2.countNonZero(contour_mask))
+            if overlap_ratio > MAX_NEEDLE_GREEN_OVERLAP_RATIO:
+                continue
+
+            score = aspect_ratio * max_distance
+            if score > best_score:
+                best_score = score
+                best_mask = contour_mask
+
+    return best_mask
 
 gauge_img = cv2.imread(
     "/home/ayaori/ros2_ws/src/tetra/Inspection/capture/Real_Environment/pressure_gauge/camera1_pressure_gauge_20260507_011409_1.jpg"
@@ -69,35 +141,21 @@ kernel = np.ones((5, 5), np.uint8)
 green_kernel = np.ones((3, 3), np.uint8)
 
 # ================================
-# 2. 정상 범위 HSV 추출
+# 2. 정상 범위 설정
 # ================================
 lower_green = np.array([22, 25, 25])
 upper_green = np.array([115, 255, 255])
 green_mask = cv2.inRange(hsv, lower_green, upper_green)
 clean_green = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, green_kernel)
 
-green_contours, _ = cv2.findContours(clean_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 safe_min = SAFE_ANGLE_MIN
 safe_max = SAFE_ANGLE_MAX
 configured_safe_min = safe_min
 configured_safe_max = safe_max
 
-if green_contours:
-    largest_green = max(green_contours, key=cv2.contourArea)
-    if cv2.contourArea(largest_green) > 30:
-        pts = largest_green.reshape(-1, 2)
-        angles = []
-        for pt in pts:
-            dx = pt[0] - center[0]
-            dy = center[1] - pt[1]
-            angle = math.degrees(math.atan2(dy, dx))
-            if angle < 0:
-                angle += 360
-            angles.append(angle)
-
-        safe_min, safe_max = min(angles), max(angles)
-
-clean_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel)
+clean_mask = choose_needle_mask(hsv, clean_green, center, processing_radius)
+if clean_mask is None:
+    clean_mask = np.zeros((h, w), dtype=np.uint8)
 
 # ================================
 # 3. 특징점 검출 및 벡터 계산
