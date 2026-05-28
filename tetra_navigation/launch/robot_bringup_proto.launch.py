@@ -65,6 +65,11 @@ def generate_launch_description():
             description='Navigate back to home after all proto inspections finish.',
         ),
         DeclareLaunchArgument(
+            'inspection_pipeline_script',
+            default_value='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',
+            description='Path to the inspection pipeline script used by proto inspection.',
+        ),
+        DeclareLaunchArgument(
             'home_x',
             default_value='0.0',
             description='Home pose x in map frame.',
@@ -97,6 +102,10 @@ def generate_launch_description():
                 'target_waypoint': LaunchConfiguration('target_waypoint', default='1'),
                 'use_mission_manager': 'false',
                 'use_rviz': LaunchConfiguration('rviz', default='true'),
+                'inspection_pipeline_script': LaunchConfiguration(
+                    'inspection_pipeline_script',
+                    default='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',
+                ),
             }.items(),
         ),
         IncludeLaunchDescription(
@@ -111,6 +120,10 @@ def generate_launch_description():
                 'mission_autostart': LaunchConfiguration('mission_autostart', default='false'),
                 'target_waypoint': LaunchConfiguration('target_waypoint', default='1'),
                 'inspection_waypoints': LaunchConfiguration('inspection_waypoints', default='[1, 2, 3]'),
+                'inspection_pipeline_script': LaunchConfiguration(
+                    'inspection_pipeline_script',
+                    default='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',
+                ),
                 'wait_for_ui_start': LaunchConfiguration('wait_for_ui_start', default='true'),
                 'waypoint2_backup_after_arrival': LaunchConfiguration('waypoint2_backup_after_arrival', default='true'),
                 'waypoint2_backup_distance': LaunchConfiguration('waypoint2_backup_distance', default='0.6'),

@@ -10,8 +10,18 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_TILE_SIZE = 64
 DEFAULT_COLOR_RATIO = 0.018
 DEFAULT_TEXTURE_THRESH = 8.0
-DEFAULT_MIN_AREA = 190.0
+DEFAULT_MIN_AREA = 80.0
 DEFAULT_SMALL_AREA = 12.0
+
+
+def contiguous_segments(xs):
+    if xs.size == 0:
+        return []
+
+    gaps = np.where(np.diff(xs) > 1)[0]
+    starts = np.r_[0, gaps + 1]
+    ends = np.r_[gaps, xs.size - 1]
+    return [(int(xs[start]), int(xs[end])) for start, end in zip(starts, ends)]
 
 
 def fill_body_rows(red_mask, image_shape):
@@ -25,23 +35,20 @@ def fill_body_rows(red_mask, image_shape):
         if xs.size < min_handle_width:
             continue
 
+        segments = contiguous_segments(xs)
         if y < handle_limit_y:
-            gaps = np.where(np.diff(xs) > 1)[0]
-            starts = np.r_[0, gaps + 1]
-            ends = np.r_[gaps, xs.size - 1]
-
-            for start, end in zip(starts, ends):
-                x1, x2 = int(xs[start]), int(xs[end])
+            for x1, x2 in segments:
                 if x2 - x1 < min_handle_width:
                     continue
                 cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
             continue
 
-        if xs.size < min_segment_width:
+        valid_segments = [(x1, x2) for x1, x2 in segments if x2 - x1 >= min_segment_width]
+        if not valid_segments:
             continue
-        x1, x2 = int(xs.min()), int(xs.max())
-        if x2 - x1 < min_segment_width:
-            continue
+
+        x1 = min(segment[0] for segment in valid_segments)
+        x2 = max(segment[1] for segment in valid_segments)
         cv2.line(body_mask, (x1, y), (x2, y), 255, 1)
 
     return body_mask
@@ -144,17 +151,62 @@ def build_label_mask(image, body_mask):
 def build_corrosion_color_mask(image, body_mask, red_mask, label_mask):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
 
-    # Printed corrosion samples appear as dark red-brown in this camera setup.
-    rust_hue = ((h >= 0) & (h <= 6)) | ((h >= 174) & (h <= 179))
-    rust_sample = rust_hue & (s >= 90) & (v >= 40) & (v <= 110)
     y_indices = np.indices(body_mask.shape)[0]
     below_handle = y_indices > int(body_mask.shape[0] * 0.16)
     in_body = (body_mask > 0) & (label_mask == 0) & below_handle
 
+    clean_red = (red_mask > 0) & in_body & (s >= 80) & (v >= 85)
+    if np.count_nonzero(clean_red) > 50:
+        normal_l = float(np.median(l[clean_red]))
+        normal_a = float(np.median(a[clean_red]))
+        normal_b = float(np.median(b[clean_red]))
+        normal_v = float(np.median(v[clean_red]))
+    else:
+        normal_l = 120.0
+        normal_a = 170.0
+        normal_b = 155.0
+        normal_v = 150.0
+
+    lab_delta = np.sqrt(
+        (l.astype(np.float32) - normal_l) ** 2
+        + (a.astype(np.float32) - normal_a) ** 2
+        + (b.astype(np.float32) - normal_b) ** 2
+    )
+
+    dark_red_brown = (
+        (((h >= 0) & (h <= 18)) | ((h >= 165) & (h <= 179)))
+        & (s >= 45)
+        & (v >= 25)
+        & (v <= max(135.0, normal_v - 20.0))
+    )
+    dark_body_anomaly = (
+        (v <= max(115.0, normal_v - 45.0))
+        & (l <= normal_l - 18.0)
+        & (lab_delta >= 34.0)
+        & (s >= 25)
+    )
+    low_saturation_rust = (
+        (v <= max(100.0, normal_v - 55.0))
+        & (l <= normal_l - 25.0)
+        & (lab_delta >= 28.0)
+        & (s >= 12)
+    )
+
+    rust_sample = dark_red_brown | dark_body_anomaly | low_saturation_rust
+    red_paint_shadow = (
+        (s >= 215)
+        & (b >= 150)
+        & (v >= 140)
+        & (l >= 82)
+    )
+    rust_sample = rust_sample & ~red_paint_shadow
+
     mask = (rust_sample & in_body).astype(np.uint8) * 255
     mask = cv2.medianBlur(mask, 3)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     return mask
 
 
@@ -240,6 +292,8 @@ def recover_small_candidates(candidate_mask, tile_mask, body_mask, image, small_
 
 def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     contours, _ = cv2.findContours(tile_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     regions = []
 
@@ -258,6 +312,16 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
         region_mask = np.zeros(tile_mask.shape, dtype=np.uint8)
         cv2.drawContours(region_mask, [contour], -1, 255, -1)
         tex = texture_score(gray[y:y + h, x:x + w], region_mask[y:y + h, x:x + w])
+        component_pixels = region_mask[y:y + h, x:x + w] > 0
+        hsv_pixels = hsv[y:y + h, x:x + w][component_pixels]
+        lab_pixels = lab[y:y + h, x:x + w][component_pixels]
+        if hsv_pixels.size == 0 or lab_pixels.size == 0:
+            continue
+
+        median_s = float(np.median(hsv_pixels[:, 1]))
+        median_v = float(np.median(hsv_pixels[:, 2]))
+        median_l = float(np.median(lab_pixels[:, 0]))
+        median_b = float(np.median(lab_pixels[:, 2]))
 
         inner_body_mask = cv2.erode(body_mask, np.ones((11, 11), np.uint8), iterations=1)
         region_pixels = max(1, cv2.countNonZero(region_mask))
@@ -270,6 +334,12 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
         is_sparse_large_region = area > 500 and fill_ratio < 0.18
         is_edge_candidate = inner_ratio < 0.45 and area < 1200
         is_bottom_edge_speck = touches_body_edge and (y + h) > image.shape[0] * 0.84 and area < 800
+        is_red_paint_shadow = (
+            median_s >= 215.0
+            and median_b >= 150.0
+            and median_v >= 140.0
+            and median_l >= 82.0
+        )
         if is_long_band:
             continue
         if is_edge_streak:
@@ -282,6 +352,8 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
             continue
         if is_bottom_edge_speck:
             continue
+        if is_red_paint_shadow:
+            continue
         if tex < texture_thresh * 0.75:
             continue
 
@@ -291,6 +363,10 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
                 "area": float(area),
                 "texture": tex,
                 "fill_ratio": fill_ratio,
+                "median_s": median_s,
+                "median_v": median_v,
+                "median_l": median_l,
+                "median_b": median_b,
             }
         )
 
