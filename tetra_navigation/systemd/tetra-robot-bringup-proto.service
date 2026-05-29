@@ -1,0 +1,16 @@
+[Unit]
+Description=TETRA robot bringup proto autostart
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ayaori/ros2_ws/src/tetra
+ExecStart=/home/ayaori/ros2_ws/src/tetra/tetra_navigation/scripts/start_robot_bringup_proto_autostart.sh
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
