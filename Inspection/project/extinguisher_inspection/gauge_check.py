@@ -228,14 +228,10 @@ if contours:
                 if matched_check_point is None:
                     matched_check_point = (check_x, check_y)
 
-    if is_safe_hsv:
-        status_text = f"SAFE HSV ({current_angle:.1f} deg)"
+    if is_safe_hsv and is_safe_angle:
+        status_text = f"SAFE HSV+ANGLE ({current_angle:.1f} deg)"
         line_color = (0, 255, 0)
-        decision_source = "HSV_MAIN"
-    elif is_safe_angle:
-        status_text = f"SAFE ANGLE BACKUP ({current_angle:.1f} deg)"
-        line_color = (0, 200, 255)
-        decision_source = "ANGLE_BACKUP"
+        decision_source = "HSV_AND_ANGLE"
     else:
         status_text = f"DANGER ({current_angle:.1f} deg)"
         line_color = (0, 0, 255)

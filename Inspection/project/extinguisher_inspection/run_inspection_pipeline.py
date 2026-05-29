@@ -557,12 +557,9 @@ def inspect_gauge(image_path, output_path):
                     is_safe_hsv = True
                     break
 
-        if is_safe_hsv:
+        if is_safe_hsv and is_safe_angle:
             pressure = "정상"
-            decision_source = "HSV_MAIN"
-        elif is_safe_angle:
-            pressure = "정상"
-            decision_source = "ANGLE_BACKUP"
+            decision_source = "HSV_AND_ANGLE"
         else:
             pressure = "낮음"
             decision_source = "DANGER"
