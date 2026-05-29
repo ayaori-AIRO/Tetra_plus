@@ -35,6 +35,11 @@ MIN_NEEDLE_CONTOUR_AREA = 1.0
 MIN_NEEDLE_ASPECT_RATIO = 1.2
 MIN_NEEDLE_RADIUS_RATIO = 0.8
 MAX_NEEDLE_GREEN_OVERLAP_RATIO = 0.25
+MIN_DARK_LINE_LENGTH_RATIO = 0.20
+MAX_DARK_LINE_CENTER_DISTANCE_RATIO = 0.25
+MIN_RADIAL_DARK_CONTRAST = 5.0
+MIN_RADIAL_DARK_HIT_RATIO = 0.28
+RADIAL_DARK_ANGLE_MARGIN = 5
 CORROSION_SIDE_COUNT = 4
 
 
@@ -152,6 +157,173 @@ def choose_needle_mask(hsv, clean_green, center, processing_radius):
                 best_mask = contour_mask
 
     return best_mask
+
+
+def build_angle_sector_mask(shape, center, radius, angle_min, angle_max):
+    h, w = shape[:2]
+    yy, xx = np.indices((h, w))
+    dx = xx - center[0]
+    dy = center[1] - yy
+    distances = np.sqrt(dx * dx + dy * dy)
+    angles = np.degrees(np.arctan2(dy, dx))
+    angles[angles < 0] += 360
+    return (
+        (distances >= radius * 0.25)
+        & (distances <= radius * 0.98)
+        & (angles >= angle_min)
+        & (angles <= angle_max)
+    ).astype(np.uint8) * 255
+
+
+def line_distance_to_point(line, point):
+    x1, y1, x2, y2 = line
+    px, py = point
+    vx = x2 - x1
+    vy = y2 - y1
+    if vx == 0 and vy == 0:
+        return float(np.hypot(px - x1, py - y1))
+    return float(abs(vy * px - vx * py + x2 * y1 - y2 * x1) / np.hypot(vx, vy))
+
+
+def find_dark_line_in_green_normal_zone(gray, hsv, clean_green, center, processing_radius, safe_min, safe_max):
+    sector_mask = build_angle_sector_mask(gray.shape, center, processing_radius, safe_min, safe_max)
+    green_in_sector = cv2.bitwise_and(clean_green, sector_mask)
+    if cv2.countNonZero(green_in_sector) < max(12, int(processing_radius * 0.35)):
+        return None
+
+    green_anchor = cv2.dilate(green_in_sector, np.ones((9, 9), np.uint8), iterations=1)
+    value = hsv[:, :, 2]
+    dark_mask = np.where((value < 125) | (gray < 100), 255, 0).astype(np.uint8)
+    dark_mask = cv2.bitwise_and(dark_mask, sector_mask)
+    dark_mask = cv2.bitwise_and(dark_mask, green_anchor)
+    dark_mask = cv2.morphologyEx(dark_mask, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+
+    edges = cv2.Canny(cv2.bitwise_and(gray, gray, mask=dark_mask), 40, 120)
+    lines = cv2.HoughLinesP(
+        edges,
+        1,
+        np.pi / 180,
+        threshold=max(6, int(processing_radius * 0.08)),
+        minLineLength=max(6, int(processing_radius * MIN_DARK_LINE_LENGTH_RATIO)),
+        maxLineGap=max(2, int(processing_radius * 0.05)),
+    )
+    if lines is None:
+        return None
+
+    best = None
+    best_score = 0.0
+    max_center_distance = max(4.0, processing_radius * MAX_DARK_LINE_CENTER_DISTANCE_RATIO)
+    for line_row in lines:
+        x1, y1, x2, y2 = [int(v) for v in line_row[0]]
+        length = float(np.hypot(x2 - x1, y2 - y1))
+        if length < processing_radius * MIN_DARK_LINE_LENGTH_RATIO:
+            continue
+
+        endpoints = np.array([[x1, y1], [x2, y2]], dtype=np.float32)
+        endpoint_distances = np.sqrt(
+            (endpoints[:, 0] - center[0]) ** 2 + (endpoints[:, 1] - center[1]) ** 2
+        )
+        far_point = tuple(endpoints[int(np.argmax(endpoint_distances))].astype(int))
+        dx = far_point[0] - center[0]
+        dy = center[1] - far_point[1]
+        angle = math.degrees(math.atan2(dy, dx))
+        if angle < 0:
+            angle += 360
+        if not (safe_min <= angle <= safe_max):
+            continue
+
+        center_distance = line_distance_to_point((x1, y1, x2, y2), center)
+        if center_distance > max_center_distance:
+            continue
+
+        line_mask = np.zeros(gray.shape, dtype=np.uint8)
+        cv2.line(line_mask, (x1, y1), (x2, y2), 255, 2)
+        green_overlap = cv2.countNonZero(cv2.bitwise_and(line_mask, green_anchor))
+        if green_overlap < max(3, int(length * 0.25)):
+            continue
+
+        score = length + max(0.0, max_center_distance - center_distance)
+        if score > best_score:
+            best_score = score
+            best = {
+                "line": (x1, y1, x2, y2),
+                "tip_point": far_point,
+                "angle": float(angle),
+                "dark_mask": dark_mask,
+            }
+
+    return best
+
+
+def find_radial_dark_valley_in_normal_zone(gray, clean_green, center, processing_radius, safe_min, safe_max):
+    radial_min = safe_min + RADIAL_DARK_ANGLE_MARGIN
+    radial_max = safe_max - RADIAL_DARK_ANGLE_MARGIN
+    sector_mask = build_angle_sector_mask(gray.shape, center, processing_radius, radial_min, radial_max)
+    if cv2.countNonZero(cv2.bitwise_and(clean_green, sector_mask)) < max(8, int(processing_radius * 0.30)):
+        return None
+
+    h, w = gray.shape[:2]
+    best = None
+    best_score = 0.0
+    radius_values = np.linspace(processing_radius * 0.20, processing_radius * 0.95, 32)
+    side_offset = max(2, int(round(processing_radius * 0.15)))
+
+    for angle in range(round(radial_min), round(radial_max) + 1, 5):
+        angle_rad = math.radians(angle)
+        ux = math.cos(angle_rad)
+        uy = -math.sin(angle_rad)
+        px = -uy
+        py = ux
+
+        line_values = []
+        side_values = []
+        dark_hits = 0
+        for radius in radius_values:
+            x = round(center[0] + radius * ux)
+            y = round(center[1] + radius * uy)
+            if not (1 <= x < w - 1 and 1 <= y < h - 1):
+                continue
+
+            side_samples = []
+            for offset in (-side_offset, side_offset):
+                sx = round(x + offset * px)
+                sy = round(y + offset * py)
+                if 0 <= sx < w and 0 <= sy < h:
+                    side_samples.append(float(gray[sy, sx]))
+            if not side_samples:
+                continue
+
+            line_value = float(gray[y, x])
+            side_value = sum(side_samples) / len(side_samples)
+            line_values.append(line_value)
+            side_values.append(side_value)
+            if side_value - line_value >= MIN_RADIAL_DARK_CONTRAST and line_value < 155:
+                dark_hits += 1
+
+        sample_count = len(line_values)
+        if sample_count < 12:
+            continue
+
+        contrast = float(np.mean(side_values) - np.mean(line_values))
+        hit_ratio = dark_hits / sample_count
+        if contrast < MIN_RADIAL_DARK_CONTRAST or hit_ratio < MIN_RADIAL_DARK_HIT_RATIO:
+            continue
+
+        score = contrast * hit_ratio
+        if score > best_score:
+            tip_radius = processing_radius * 0.90
+            best_score = score
+            best = {
+                "tip_point": (
+                    round(center[0] + tip_radius * ux),
+                    round(center[1] + tip_radius * uy),
+                ),
+                "angle": float(angle),
+                "contrast": contrast,
+                "hit_ratio": hit_ratio,
+            }
+
+    return best
 
 
 def publish_result_index(data):
@@ -306,8 +478,8 @@ def inspect_gauge(image_path, output_path):
         raise FileNotFoundError(image_path)
 
     h, w = gauge_img.shape[:2]
-    gray_for_circle = cv2.cvtColor(gauge_img, cv2.COLOR_BGR2GRAY)
-    gray_for_circle = cv2.medianBlur(gray_for_circle, 5)
+    gray = cv2.cvtColor(gauge_img, cv2.COLOR_BGR2GRAY)
+    gray_for_circle = cv2.medianBlur(gray, 5)
     circles = cv2.HoughCircles(
         gray_for_circle,
         cv2.HOUGH_GRADIENT,
@@ -359,7 +531,7 @@ def inspect_gauge(image_path, output_path):
     tip_point = None
     current_angle = None
     decision_source = "NO_NEEDLE"
-    pressure = "낮음"
+    pressure = "판정불가"
     if contours:
         largest_contour = max(contours, key=cv2.contourArea)
         pts = largest_contour.reshape(-1, 2)
@@ -392,9 +564,44 @@ def inspect_gauge(image_path, output_path):
             pressure = "정상"
             decision_source = "ANGLE_BACKUP"
         else:
+            pressure = "낮음"
             decision_source = "DANGER"
+    else:
+        dark_line = find_dark_line_in_green_normal_zone(
+            gray,
+            hsv,
+            clean_green,
+            center,
+            processing_radius,
+            safe_min,
+            safe_max,
+        )
+        if dark_line is not None:
+            pressure = "정상"
+            current_angle = dark_line["angle"]
+            tip_point = dark_line["tip_point"]
+            decision_source = "GREEN_DARK_LINE_BACKUP"
+        else:
+            radial_dark = find_radial_dark_valley_in_normal_zone(
+                gray,
+                clean_green,
+                center,
+                processing_radius,
+                safe_min,
+                safe_max,
+            )
+            if radial_dark is not None:
+                pressure = "정상"
+                current_angle = radial_dark["angle"]
+                tip_point = radial_dark["tip_point"]
+                decision_source = "RADIAL_DARK_VALLEY_BACKUP"
 
-    line_color = (0, 220, 0) if pressure == "정상" else (0, 0, 255)
+    if pressure == "정상":
+        line_color = (0, 220, 0)
+    elif pressure == "판정불가":
+        line_color = (120, 120, 120)
+    else:
+        line_color = (0, 0, 255)
     if tip_point is not None:
         cv2.line(img_result, center, tip_point, line_color, 2)
         cv2.circle(img_result, tip_point, 2, (255, 0, 0), -1)
@@ -562,6 +769,8 @@ def inspect_extinguisher(
     data = {
         "extinguisher_id": extinguisher_id,
         "pressure": gauge["pressure"],
+        "pressure_angle": gauge["angle"],
+        "pressure_decision_source": gauge["decision_source"],
         "appearance": corrosion["appearance"],
         "expiry": label["expiry"],
         "expiry_date": label["expiry_date"],

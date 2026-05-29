@@ -263,6 +263,49 @@ def touches_body_side(body_mask, x, y, w, h, margin=5):
     return (x - body_left <= margin) or (body_right - (x + w - 1) <= margin)
 
 
+def build_label_context_mask(image, body_mask):
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    _, s, v = cv2.split(hsv)
+    seed = ((s <= 255) & (v > 70) & (body_mask > 0)).astype(np.uint8) * 255
+    seed[:int(image.shape[0] * 0.24), :] = 0
+    seed = cv2.morphologyEx(seed, cv2.MORPH_CLOSE, np.ones((35, 21), np.uint8))
+    seed = cv2.morphologyEx(seed, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
+
+    context_mask = np.zeros(seed.shape, dtype=np.uint8)
+    contours, _ = cv2.findContours(seed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        x, y, w, h = cv2.boundingRect(contour)
+        if area < 1200 or w < 25 or h < 15:
+            continue
+        if h > image.shape[0] * 0.18:
+            continue
+
+        x1 = max(0, x - 10)
+        y1 = max(0, y - 12)
+        x2 = min(context_mask.shape[1] - 1, x + w + 10)
+        y2 = min(context_mask.shape[0] - 1, y + h + 12)
+        cv2.rectangle(context_mask, (x1, y1), (x2, y2), 255, -1)
+
+    return cv2.bitwise_and(context_mask, body_mask)
+
+
+def touches_unreliable_neck_area(image, x, y, w, h):
+    circle = detect_gauge_circle(image)
+    if circle is None:
+        return y + h <= image.shape[0] * 0.22
+
+    cx, cy, radius = circle
+    x1 = int(cx - radius * 1.25)
+    x2 = int(cx + radius * 1.25)
+    y1 = int(cy + radius * 0.35)
+    y2 = int(cy + radius * 2.25)
+
+    box_x1, box_y1 = x, y
+    box_x2, box_y2 = x + w, y + h
+    return not (box_x2 < x1 or box_x1 > x2 or box_y2 < y1 or box_y1 > y2)
+
+
 def recover_small_candidates(candidate_mask, tile_mask, body_mask, image, small_area, texture_thresh):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     recovered = np.zeros_like(candidate_mask)
@@ -294,6 +337,7 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    label_context_mask = build_label_context_mask(image, body_mask)
     contours, _ = cv2.findContours(tile_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     regions = []
 
@@ -322,11 +366,16 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
         median_v = float(np.median(hsv_pixels[:, 2]))
         median_l = float(np.median(lab_pixels[:, 0]))
         median_b = float(np.median(lab_pixels[:, 2]))
+        std_l = float(np.std(lab_pixels[:, 0]))
+        std_a = float(np.std(lab_pixels[:, 1]))
+        std_b = float(np.std(lab_pixels[:, 2]))
 
         inner_body_mask = cv2.erode(body_mask, np.ones((11, 11), np.uint8), iterations=1)
         region_pixels = max(1, cv2.countNonZero(region_mask))
         inner_pixels = cv2.countNonZero(cv2.bitwise_and(region_mask, inner_body_mask))
         inner_ratio = inner_pixels / float(region_pixels)
+        label_context_pixels = cv2.countNonZero(cv2.bitwise_and(region_mask, label_context_mask))
+        label_context_ratio = label_context_pixels / float(region_pixels)
 
         is_long_band = aspect > 5.0 and h < image.shape[0] * 0.08
         is_edge_streak = touches_body_edge and h > w * 1.8 and area < 900
@@ -339,6 +388,22 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
             and median_b >= 150.0
             and median_v >= 140.0
             and median_l >= 82.0
+        )
+        is_neck_artifact = touches_unreliable_neck_area(image, x, y, w, h)
+        is_smooth_orange_paint = (
+            area >= 900.0
+            and median_s >= 220.0
+            and median_b >= 145.0
+            and std_l <= 18.0
+            and std_a <= 11.0
+            and std_b <= 15.0
+        )
+        is_label_boundary_artifact = (
+            label_context_ratio >= 0.55
+            and area >= 900.0
+            and fill_ratio <= 0.38
+            and median_s >= 230.0
+            and median_b >= 150.0
         )
         if is_long_band:
             continue
@@ -354,6 +419,12 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
             continue
         if is_red_paint_shadow:
             continue
+        if is_neck_artifact:
+            continue
+        if is_smooth_orange_paint:
+            continue
+        if is_label_boundary_artifact:
+            continue
         if tex < texture_thresh * 0.75:
             continue
 
@@ -367,6 +438,10 @@ def find_corrosion_regions(tile_mask, body_mask, min_area, texture_thresh, image
                 "median_v": median_v,
                 "median_l": median_l,
                 "median_b": median_b,
+                "std_l": std_l,
+                "std_a": std_a,
+                "std_b": std_b,
+                "label_context_ratio": label_context_ratio,
             }
         )
 

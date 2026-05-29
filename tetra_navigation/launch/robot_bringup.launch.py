@@ -32,6 +32,12 @@ def generate_launch_description():
     use_cmd_vel_mux = LaunchConfiguration('use_cmd_vel_mux')
     use_rviz = LaunchConfiguration('use_rviz')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    nav2_max_vel_theta = LaunchConfiguration('nav2_max_vel_theta')
+    nav2_acc_lim_theta = LaunchConfiguration('nav2_acc_lim_theta')
+    nav2_decel_lim_theta = LaunchConfiguration('nav2_decel_lim_theta')
+    nav2_max_rotational_vel = LaunchConfiguration('nav2_max_rotational_vel')
+    nav2_min_rotational_vel = LaunchConfiguration('nav2_min_rotational_vel')
+    nav2_rotational_acc_lim = LaunchConfiguration('nav2_rotational_acc_lim')
     mission_autostart = LaunchConfiguration('mission_autostart')
     start_docking_after_nav_active = LaunchConfiguration('start_docking_after_nav_active')
     dock_after_waypoint = LaunchConfiguration('dock_after_waypoint')
@@ -86,12 +92,24 @@ def generate_launch_description():
                 'mkdir -p /tmp/tetra_ui_logs; '
                 ': > /tmp/tetra_ui_logs/nav2.log; '
                 'ros2 launch tetra_navigation bringup_launch.py use_sim_time:=$USE_SIM_TIME '
+                'max_vel_theta:=$NAV2_MAX_VEL_THETA '
+                'acc_lim_theta:=$NAV2_ACC_LIM_THETA '
+                'decel_lim_theta:=$NAV2_DECEL_LIM_THETA '
+                'max_rotational_vel:=$NAV2_MAX_ROTATIONAL_VEL '
+                'min_rotational_vel:=$NAV2_MIN_ROTATIONAL_VEL '
+                'rotational_acc_lim:=$NAV2_ROTATIONAL_ACC_LIM '
                 '2>&1 | tee -a /tmp/tetra_ui_logs/nav2.log'
             ),
         ],
         output='screen',
         additional_env={
             'USE_SIM_TIME': use_sim_time,
+            'NAV2_MAX_VEL_THETA': nav2_max_vel_theta,
+            'NAV2_ACC_LIM_THETA': nav2_acc_lim_theta,
+            'NAV2_DECEL_LIM_THETA': nav2_decel_lim_theta,
+            'NAV2_MAX_ROTATIONAL_VEL': nav2_max_rotational_vel,
+            'NAV2_MIN_ROTATIONAL_VEL': nav2_min_rotational_vel,
+            'NAV2_ROTATIONAL_ACC_LIM': nav2_rotational_acc_lim,
         },
     )
 
@@ -410,6 +428,36 @@ def generate_launch_description():
             'use_sim_time',
             default_value='false',
             description='Use simulation clock for robot and Nav2.'
+        ),
+        DeclareLaunchArgument(
+            'nav2_max_vel_theta',
+            default_value='0.6',
+            description='Maximum Nav2 angular velocity in rad/s.'
+        ),
+        DeclareLaunchArgument(
+            'nav2_acc_lim_theta',
+            default_value='2.0',
+            description='Maximum Nav2 angular acceleration in rad/s^2.'
+        ),
+        DeclareLaunchArgument(
+            'nav2_decel_lim_theta',
+            default_value='-2.0',
+            description='Maximum Nav2 angular deceleration in rad/s^2.'
+        ),
+        DeclareLaunchArgument(
+            'nav2_max_rotational_vel',
+            default_value='0.6',
+            description='Maximum Nav2 behavior rotational velocity in rad/s.'
+        ),
+        DeclareLaunchArgument(
+            'nav2_min_rotational_vel',
+            default_value='0.1',
+            description='Minimum Nav2 behavior rotational velocity in rad/s.'
+        ),
+        DeclareLaunchArgument(
+            'nav2_rotational_acc_lim',
+            default_value='2.0',
+            description='Maximum Nav2 behavior rotational acceleration in rad/s^2.'
         ),
         DeclareLaunchArgument(
             'mission_autostart',

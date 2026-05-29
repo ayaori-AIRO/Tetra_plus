@@ -65,6 +65,36 @@ def generate_launch_description():
             description='Navigate back to home after all proto inspections finish.',
         ),
         DeclareLaunchArgument(
+            'nav2_max_vel_theta',
+            default_value='0.3',
+            description='Maximum Nav2 angular velocity in rad/s for proto waypoint turns.',
+        ),
+        DeclareLaunchArgument(
+            'nav2_acc_lim_theta',
+            default_value='0.8',
+            description='Maximum Nav2 angular acceleration in rad/s^2 for proto waypoint turns.',
+        ),
+        DeclareLaunchArgument(
+            'nav2_decel_lim_theta',
+            default_value='-0.8',
+            description='Maximum Nav2 angular deceleration in rad/s^2 for proto waypoint turns.',
+        ),
+        DeclareLaunchArgument(
+            'nav2_max_rotational_vel',
+            default_value='0.3',
+            description='Maximum Nav2 behavior rotational velocity in rad/s for proto waypoint turns.',
+        ),
+        DeclareLaunchArgument(
+            'nav2_min_rotational_vel',
+            default_value='0.08',
+            description='Minimum Nav2 behavior rotational velocity in rad/s for proto waypoint turns.',
+        ),
+        DeclareLaunchArgument(
+            'nav2_rotational_acc_lim',
+            default_value='0.8',
+            description='Maximum Nav2 behavior rotational acceleration in rad/s^2 for proto waypoint turns.',
+        ),
+        DeclareLaunchArgument(
             'inspection_pipeline_script',
             default_value='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',
             description='Path to the inspection pipeline script used by proto inspection.',
@@ -102,6 +132,12 @@ def generate_launch_description():
                 'target_waypoint': LaunchConfiguration('target_waypoint', default='1'),
                 'use_mission_manager': 'false',
                 'use_rviz': LaunchConfiguration('rviz', default='true'),
+                'nav2_max_vel_theta': LaunchConfiguration('nav2_max_vel_theta', default='0.3'),
+                'nav2_acc_lim_theta': LaunchConfiguration('nav2_acc_lim_theta', default='0.8'),
+                'nav2_decel_lim_theta': LaunchConfiguration('nav2_decel_lim_theta', default='-0.8'),
+                'nav2_max_rotational_vel': LaunchConfiguration('nav2_max_rotational_vel', default='0.3'),
+                'nav2_min_rotational_vel': LaunchConfiguration('nav2_min_rotational_vel', default='0.08'),
+                'nav2_rotational_acc_lim': LaunchConfiguration('nav2_rotational_acc_lim', default='0.8'),
                 'inspection_pipeline_script': LaunchConfiguration(
                     'inspection_pipeline_script',
                     default='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',

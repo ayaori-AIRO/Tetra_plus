@@ -278,13 +278,16 @@ class MissionManagerProto(MissionManager):
         goal.mid_target_distance = 0.2
         goal.near_tag_id = 1
         goal.near_tag_size = 0.01
-        goal.near_target_distance = 0.03
+        goal.near_target_distance = 0.044 if waypoint_id in (2, 3) else 0.03
         goal.switch_distance = 0.45
         goal.near_switch_distance = 0.25
         goal.timeout_sec = 60.0
 
         self.select_cmd_vel_source('servo')
-        self.get_logger().info(f'Sending dock_to_tag goal for waypoint {waypoint_id}.')
+        self.get_logger().info(
+            f'Sending dock_to_tag goal for waypoint {waypoint_id}: '
+            f'near_target_distance={goal.near_target_distance:.3f} m.'
+        )
         send_future = self.dock_client.send_goal_async(
             goal,
             feedback_callback=self.docking_feedback_callback,

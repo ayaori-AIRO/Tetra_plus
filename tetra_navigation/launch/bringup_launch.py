@@ -46,6 +46,10 @@ def generate_launch_description():
     log_level = LaunchConfiguration('log_level')
     max_vel_theta = LaunchConfiguration('max_vel_theta')
     acc_lim_theta = LaunchConfiguration('acc_lim_theta')
+    decel_lim_theta = LaunchConfiguration('decel_lim_theta')
+    max_rotational_vel = LaunchConfiguration('max_rotational_vel')
+    min_rotational_vel = LaunchConfiguration('min_rotational_vel')
+    rotational_acc_lim = LaunchConfiguration('rotational_acc_lim')
 
     # Map fully qualified names to relative ones so the node's namespace can be prepended.
     # In case of the transforms (tf), currently, there doesn't seem to be a better alternative
@@ -61,7 +65,11 @@ def generate_launch_description():
         'use_sim_time': use_sim_time,
         'yaml_filename': map_yaml_file,
         'max_vel_theta': max_vel_theta,
-        'acc_lim_theta': acc_lim_theta}
+        'acc_lim_theta': acc_lim_theta,
+        'decel_lim_theta': decel_lim_theta,
+        'max_rotational_vel': max_rotational_vel,
+        'min_rotational_vel': min_rotational_vel,
+        'rotational_acc_lim': rotational_acc_lim}
 
     # Only it applys when `use_namespace` is True.
     # '<robot_namespace>' keyword shall be replaced by 'namespace' launch argument
@@ -139,6 +147,26 @@ def generate_launch_description():
         default_value='2.0',
         description='Maximum Nav2 angular acceleration in rad/s^2')
 
+    declare_decel_lim_theta_cmd = DeclareLaunchArgument(
+        'decel_lim_theta',
+        default_value='-2.0',
+        description='Maximum Nav2 angular deceleration in rad/s^2')
+
+    declare_max_rotational_vel_cmd = DeclareLaunchArgument(
+        'max_rotational_vel',
+        default_value='0.6',
+        description='Maximum Nav2 behavior rotational velocity in rad/s')
+
+    declare_min_rotational_vel_cmd = DeclareLaunchArgument(
+        'min_rotational_vel',
+        default_value='0.1',
+        description='Minimum Nav2 behavior rotational velocity in rad/s')
+
+    declare_rotational_acc_lim_cmd = DeclareLaunchArgument(
+        'rotational_acc_lim',
+        default_value='2.0',
+        description='Maximum Nav2 behavior rotational acceleration in rad/s^2')
+
     # Specify the actions
     bringup_cmd_group = GroupAction([
         PushRosNamespace(
@@ -207,6 +235,10 @@ def generate_launch_description():
     ld.add_action(declare_log_level_cmd)
     ld.add_action(declare_max_vel_theta_cmd)
     ld.add_action(declare_acc_lim_theta_cmd)
+    ld.add_action(declare_decel_lim_theta_cmd)
+    ld.add_action(declare_max_rotational_vel_cmd)
+    ld.add_action(declare_min_rotational_vel_cmd)
+    ld.add_action(declare_rotational_acc_lim_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(bringup_cmd_group)

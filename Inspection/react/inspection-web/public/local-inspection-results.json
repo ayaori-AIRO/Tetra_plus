@@ -2,6 +2,548 @@
   {
     "extinguisher_id": "id3",
     "pressure": "정상",
+    "pressure_angle": 82.8749836510982,
+    "pressure_decision_source": "ANGLE_BACKUP",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2036-03",
+    "result": "fail",
+    "time": "2026-05-29T13:39:32+09:00",
+    "run_id": "20260529_133932",
+    "pressure_image": "/inspection-results/id3_inspection/20260529_133932/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id3_inspection/20260529_133932/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id3_inspection/20260529_133932/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 5,
+        "severity_ratio": 11.469939142646961,
+        "image": "/inspection-results/id3_inspection/20260529_133932/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id3_inspection/20260529_133932/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id3-20260529_133932"
+  },
+  {
+    "extinguisher_id": "id2",
+    "pressure": "낮음",
+    "pressure_angle": 33.690067525979785,
+    "pressure_decision_source": "DANGER",
+    "appearance": "정상",
+    "expiry": "내용연한 초과",
+    "expiry_date": "2024-03",
+    "result": "fail",
+    "time": "2026-05-29T13:36:32+09:00",
+    "run_id": "20260529_133632",
+    "pressure_image": "/inspection-results/id2_inspection/20260529_133632/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id2_inspection/20260529_133632/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id2_inspection/20260529_133632/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id2_inspection/20260529_133632/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id2_inspection/20260529_133632/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id2-20260529_133632"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "정상",
+    "pressure_angle": 95.0,
+    "pressure_decision_source": "RADIAL_DARK_VALLEY_BACKUP",
+    "appearance": "정상",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2028-05",
+    "result": "pass",
+    "time": "2026-05-29T13:34:04+09:00",
+    "run_id": "20260529_133404",
+    "pressure_image": "/inspection-results/id1_inspection/20260529_133404/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id1_inspection/20260529_133404/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id1_inspection/20260529_133404/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id1_inspection/20260529_133404/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id1_inspection/20260529_133404/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id1-20260529_133404"
+  },
+  {
+    "extinguisher_id": "id3",
+    "pressure": "정상",
+    "pressure_angle": 90.0,
+    "pressure_decision_source": "ANGLE_BACKUP",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2036-03",
+    "result": "fail",
+    "time": "2026-05-29T13:24:37+09:00",
+    "run_id": "20260529_132437",
+    "pressure_image": "/inspection-results/id3_inspection/20260529_132437/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id3_inspection/20260529_132437/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id3_inspection/20260529_132437/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 5,
+        "severity_ratio": 12.574206143671063,
+        "image": "/inspection-results/id3_inspection/20260529_132437/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id3_inspection/20260529_132437/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id3-20260529_132437"
+  },
+  {
+    "extinguisher_id": "id2",
+    "pressure": "낮음",
+    "pressure_angle": 36.02737338510361,
+    "pressure_decision_source": "DANGER",
+    "appearance": "정상",
+    "expiry": "내용연한 초과",
+    "expiry_date": "2024-03",
+    "result": "fail",
+    "time": "2026-05-29T13:21:58+09:00",
+    "run_id": "20260529_132158",
+    "pressure_image": "/inspection-results/id2_inspection/20260529_132158/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id2_inspection/20260529_132158/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id2_inspection/20260529_132158/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id2_inspection/20260529_132158/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id2_inspection/20260529_132158/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id2-20260529_132158"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "정상",
+    "pressure_angle": 95.0,
+    "pressure_decision_source": "RADIAL_DARK_VALLEY_BACKUP",
+    "appearance": "정상",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2028-05",
+    "result": "pass",
+    "time": "2026-05-29T13:19:51+09:00",
+    "run_id": "20260529_131951",
+    "pressure_image": "/inspection-results/id1_inspection/20260529_131951/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id1_inspection/20260529_131951/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id1_inspection/20260529_131951/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id1_inspection/20260529_131951/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id1_inspection/20260529_131951/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id1-20260529_131951"
+  },
+  {
+    "extinguisher_id": "id3",
+    "pressure": "정상",
+    "pressure_angle": 82.8749836510982,
+    "pressure_decision_source": "ANGLE_BACKUP",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2036-03",
+    "result": "fail",
+    "time": "2026-05-29T13:08:33+09:00",
+    "run_id": "20260529_130833",
+    "pressure_image": "/inspection-results/id3_inspection/20260529_130833/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id3_inspection/20260529_130833/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id3_inspection/20260529_130833/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 5,
+        "severity_ratio": 10.759511363318703,
+        "image": "/inspection-results/id3_inspection/20260529_130833/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id3_inspection/20260529_130833/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id3-20260529_130833"
+  },
+  {
+    "extinguisher_id": "id2",
+    "pressure": "낮음",
+    "pressure_angle": 49.398705354995535,
+    "pressure_decision_source": "DANGER",
+    "appearance": "정상",
+    "expiry": "내용연한 초과",
+    "expiry_date": "2024-03",
+    "result": "fail",
+    "time": "2026-05-29T13:05:54+09:00",
+    "run_id": "20260529_130554",
+    "pressure_image": "/inspection-results/id2_inspection/20260529_130554/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id2_inspection/20260529_130554/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id2_inspection/20260529_130554/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id2_inspection/20260529_130554/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id2_inspection/20260529_130554/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id2-20260529_130554"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "인식 안됨",
+    "pressure_angle": null,
+    "pressure_decision_source": "NO_IMAGE",
+    "appearance": "인식 안됨",
+    "expiry": "인식 안됨",
+    "expiry_date": "",
+    "result": "fail",
+    "time": "2026-05-29T13:03:58+09:00",
+    "run_id": "20260529_130358",
+    "pressure_image": "",
+    "appearance_image": "",
+    "appearance_images": [],
+    "appearance_sides": [],
+    "expiry_image": "",
+    "full_image": "/inspection-results/id1/full/fallback_camera1_top_camera2_bottom_20260529_130353.jpg",
+    "capture_complete": false,
+    "id": "local-id1-20260529_130358"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "정상",
+    "pressure_angle": 100.0,
+    "pressure_decision_source": "RADIAL_DARK_VALLEY_BACKUP",
+    "appearance": "정상",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2028-05",
+    "result": "pass",
+    "time": "2026-05-29T12:59:37+09:00",
+    "run_id": "proto_current_gauge_criteria_test_v2",
+    "pressure_image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test_v2/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test_v2/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id1_inspection/proto_current_gauge_criteria_test_v2/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test_v2/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test_v2/label/label_result.jpg",
+    "full_image": "/inspection-results/id1/full/fallback_camera1_top_camera2_bottom_20260527_232156.jpg",
+    "capture_complete": true,
+    "id": "local-id1-proto_current_gauge_criteria_test_v2"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "정상",
+    "appearance": "정상",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2028-05",
+    "result": "pass",
+    "time": "2026-05-29T12:59:02+09:00",
+    "run_id": "proto_current_gauge_criteria_test",
+    "pressure_image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id1_inspection/proto_current_gauge_criteria_test/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id1_inspection/proto_current_gauge_criteria_test/label/label_result.jpg",
+    "full_image": "/inspection-results/id1/full/fallback_camera1_top_camera2_bottom_20260527_232156.jpg",
+    "capture_complete": true,
+    "id": "local-id1-proto_current_gauge_criteria_test"
+  },
+  {
+    "extinguisher_id": "id2",
+    "pressure": "낮음",
+    "appearance": "정상",
+    "expiry": "내용연한 초과",
+    "expiry_date": "2024-03",
+    "result": "fail",
+    "time": "2026-05-29T12:22:58+09:00",
+    "run_id": "20260529_122258",
+    "pressure_image": "/inspection-results/id2_inspection/20260529_122258/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id2_inspection/20260529_122258/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id2_inspection/20260529_122258/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id2_inspection/20260529_122258/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id2_inspection/20260529_122258/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id2-20260529_122258"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "낮음",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2028-05",
+    "result": "fail",
+    "time": "2026-05-29T12:20:49+09:00",
+    "run_id": "20260529_122049",
+    "pressure_image": "/inspection-results/id1_inspection/20260529_122049/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id1_inspection/20260529_122049/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id1_inspection/20260529_122049/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 1,
+        "severity_ratio": 1.3792858495927258,
+        "image": "/inspection-results/id1_inspection/20260529_122049/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id1_inspection/20260529_122049/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id1-20260529_122049"
+  },
+  {
+    "extinguisher_id": "id3",
+    "pressure": "정상",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2036-03",
+    "result": "fail",
+    "time": "2026-05-29T11:48:40+09:00",
+    "run_id": "20260529_114840",
+    "pressure_image": "/inspection-results/id3_inspection/20260529_114840/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id3_inspection/20260529_114840/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id3_inspection/20260529_114840/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 5,
+        "severity_ratio": 11.611698817672682,
+        "image": "/inspection-results/id3_inspection/20260529_114840/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id3_inspection/20260529_114840/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id3-20260529_114840"
+  },
+  {
+    "extinguisher_id": "id2",
+    "pressure": "낮음",
+    "appearance": "정상",
+    "expiry": "내용연한 초과",
+    "expiry_date": "2024-03",
+    "result": "fail",
+    "time": "2026-05-29T11:45:40+09:00",
+    "run_id": "20260529_114540",
+    "pressure_image": "/inspection-results/id2_inspection/20260529_114540/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id2_inspection/20260529_114540/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id2_inspection/20260529_114540/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "정상",
+        "regions": 0,
+        "severity_ratio": 0.0,
+        "image": "/inspection-results/id2_inspection/20260529_114540/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id2_inspection/20260529_114540/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id2-20260529_114540"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "정상",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2028-05",
+    "result": "fail",
+    "time": "2026-05-29T11:42:45+09:00",
+    "run_id": "20260529_114245",
+    "pressure_image": "/inspection-results/id1_inspection/20260529_114245/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id1_inspection/20260529_114245/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id1_inspection/20260529_114245/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 1,
+        "severity_ratio": 1.4417300760913097,
+        "image": "/inspection-results/id1_inspection/20260529_114245/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id1_inspection/20260529_114245/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id1-20260529_114245"
+  },
+  {
+    "extinguisher_id": "id3",
+    "pressure": "정상",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2036-03",
+    "result": "fail",
+    "time": "2026-05-29T10:56:54+09:00",
+    "run_id": "20260529_105654",
+    "pressure_image": "/inspection-results/id3_inspection/20260529_105654/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id3_inspection/20260529_105654/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id3_inspection/20260529_105654/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 5,
+        "severity_ratio": 12.216085559186538,
+        "image": "/inspection-results/id3_inspection/20260529_105654/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id3_inspection/20260529_105654/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id3-20260529_105654"
+  },
+  {
+    "extinguisher_id": "id2",
+    "pressure": "낮음",
+    "appearance": "부식",
+    "expiry": "내용연한 초과",
+    "expiry_date": "2024-03",
+    "result": "fail",
+    "time": "2026-05-29T10:54:05+09:00",
+    "run_id": "20260529_105405",
+    "pressure_image": "/inspection-results/id2_inspection/20260529_105405/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id2_inspection/20260529_105405/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id2_inspection/20260529_105405/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 1,
+        "severity_ratio": 0.3611204023736078,
+        "image": "/inspection-results/id2_inspection/20260529_105405/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id2_inspection/20260529_105405/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id2-20260529_105405"
+  },
+  {
+    "extinguisher_id": "id1",
+    "pressure": "낮음",
+    "appearance": "부식",
+    "expiry": "내용연한 정상",
+    "expiry_date": "2028-05",
+    "result": "fail",
+    "time": "2026-05-29T10:51:53+09:00",
+    "run_id": "20260529_105153",
+    "pressure_image": "/inspection-results/id1_inspection/20260529_105153/pressure_gauge/gauge_result.jpg",
+    "appearance_image": "/inspection-results/id1_inspection/20260529_105153/fire_extinguisher/corrosion_result_01.jpg",
+    "appearance_images": [
+      "/inspection-results/id1_inspection/20260529_105153/fire_extinguisher/corrosion_result_01.jpg"
+    ],
+    "appearance_sides": [
+      {
+        "side": 1,
+        "appearance": "부식",
+        "regions": 6,
+        "severity_ratio": 19.483963296573787,
+        "image": "/inspection-results/id1_inspection/20260529_105153/fire_extinguisher/corrosion_result_01.jpg"
+      }
+    ],
+    "expiry_image": "/inspection-results/id1_inspection/20260529_105153/label/label_result.jpg",
+    "full_image": "",
+    "capture_complete": true,
+    "id": "local-id1-20260529_105153"
+  },
+  {
+    "extinguisher_id": "id3",
+    "pressure": "정상",
     "appearance": "부식",
     "expiry": "내용연한 정상",
     "expiry_date": "2036-03",

@@ -27,9 +27,16 @@ const defaultBringupLogGroups = [
 const regularInspectionLastRunKey = "regularInspectionLastRunKey";
 const localInspectionResultsPath = "/local-inspection-results.json";
 
-const getInspectionRecordKey = (item) => (
-  item.id || `${item.extinguisher_id || "unknown"}-${item.run_id || item.time || ""}`
-);
+const getInspectionRecordKey = (item) => {
+  const extinguisherId = item.extinguisher_id || "unknown";
+  if (item.run_id) {
+    return `${extinguisherId}-${item.run_id}`;
+  }
+  if (item.time) {
+    return `${extinguisherId}-${item.time}`;
+  }
+  return item.id || `${extinguisherId}-unknown`;
+};
 
 const mergeInspectionRecords = (firebaseRecords, localRecords) => {
   const recordsByKey = new Map();
@@ -111,6 +118,8 @@ function App() {
   const photoModalRef = useRef(null);
   const streamRetryTimerRef = useRef(null);
   const neopixelTimersRef = useRef({});
+  const missionLogPanelRef = useRef(null);
+  const bringupLogPanelRefs = useRef({});
   const extinguisherNames = [
     "EXT1 (B1F 복도 A)",
     "EXT2 B1F 복도B",
@@ -738,6 +747,20 @@ function App() {
   }, [robotPoseBaseUrl]);
 
   useEffect(() => {
+    if (missionLogPanelRef.current) {
+      missionLogPanelRef.current.scrollTop = missionLogPanelRef.current.scrollHeight;
+    }
+  }, [missionLogs, activeTab]);
+
+  useEffect(() => {
+    Object.values(bringupLogPanelRefs.current).forEach((panel) => {
+      if (panel) {
+        panel.scrollTop = panel.scrollHeight;
+      }
+    });
+  }, [bringupLogGroups, activeTab]);
+
+  useEffect(() => {
     if (activeMapView !== "live" || liveMapLoaded) {
       return undefined;
     }
@@ -806,7 +829,7 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <div className="inspection-log-panel">
+                <div className="inspection-log-panel" ref={missionLogPanelRef}>
                   {missionLogs.length > 0 ? (
                     missionLogs.slice(-12).map((log, index) => (
                       <div key={`${log.time || "log"}-${index}`}>
@@ -1029,7 +1052,16 @@ function App() {
               {bringupLogGroups.map((group) => (
                 <section className="bringup-log-card" key={group.id}>
                   <div className="bringup-log-title">{group.title}</div>
-                  <div className="full-log-panel">
+                  <div
+                    className="full-log-panel"
+                    ref={(node) => {
+                      if (node) {
+                        bringupLogPanelRefs.current[group.id] = node;
+                      } else {
+                        delete bringupLogPanelRefs.current[group.id];
+                      }
+                    }}
+                  >
                     {group.lines?.length > 0 ? (
                       group.lines.map((line, index) => (
                         <div className="bringup-log-line" key={`${group.id}-${index}`}>

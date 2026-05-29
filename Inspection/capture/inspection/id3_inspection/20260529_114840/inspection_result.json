@@ -1,0 +1,27 @@
+{
+  "extinguisher_id": "id3",
+  "pressure": "정상",
+  "appearance": "부식",
+  "expiry": "내용연한 정상",
+  "expiry_date": "2036-03",
+  "result": "fail",
+  "time": "2026-05-29T11:48:40+09:00",
+  "run_id": "20260529_114840",
+  "pressure_image": "/inspection-results/id3_inspection/20260529_114840/pressure_gauge/gauge_result.jpg",
+  "appearance_image": "/inspection-results/id3_inspection/20260529_114840/fire_extinguisher/corrosion_result_01.jpg",
+  "appearance_images": [
+    "/inspection-results/id3_inspection/20260529_114840/fire_extinguisher/corrosion_result_01.jpg"
+  ],
+  "appearance_sides": [
+    {
+      "side": 1,
+      "appearance": "부식",
+      "regions": 5,
+      "severity_ratio": 11.611698817672682,
+      "image": "/inspection-results/id3_inspection/20260529_114840/fire_extinguisher/corrosion_result_01.jpg"
+    }
+  ],
+  "expiry_image": "/inspection-results/id3_inspection/20260529_114840/label/label_result.jpg",
+  "full_image": "",
+  "capture_complete": true
+}
