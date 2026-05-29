@@ -23,6 +23,9 @@ STREAM_FPS = 12
 HEALTH_FRAME_MAX_AGE_SEC = float(os.environ.get("TETRA_HEALTH_FRAME_MAX_AGE_SEC", "5.0"))
 DETECTION_LOG_ENABLED = os.environ.get("TETRA_DETECTION_LOG", "summary").lower()
 DETECTION_LOG_INTERVAL = float(os.environ.get("TETRA_DETECTION_LOG_INTERVAL", "5.0"))
+DETECTION_HOLD_SEC = float(os.environ.get("TETRA_DETECTION_HOLD_SEC", "0.8"))
+INFERENCE_CONFIDENCE_FLOOR = float(os.environ.get("TETRA_INFERENCE_CONFIDENCE_FLOOR", "0.35"))
+DISPLAY_CONFIDENCE_FLOOR = float(os.environ.get("TETRA_DISPLAY_CONFIDENCE_FLOOR", "0.35"))
 MIN_FRONT_LABEL_WIDTH = int(os.environ.get("TETRA_MIN_FRONT_LABEL_WIDTH", "50"))
 MIN_FRONT_LABEL_HEIGHT = int(os.environ.get("TETRA_MIN_FRONT_LABEL_HEIGHT", "50"))
 VALID_EXTINGUISHER_IDS = {1, 2, 3}
@@ -43,6 +46,10 @@ latest_frame_times = {
 latest_viewer_times = {
     "camera1": 0,
     "camera2": 0,
+}
+recent_detections = {
+    "camera1": {},
+    "camera2": {},
 }
 capture_dirs = {
     "소화기": "fire_extinguisher",
@@ -135,6 +142,52 @@ def log_detections(detections):
         for (camera_number, model_name, class_name), count in sorted(summary.items())
     ]
     print("[감지 요약] " + ", ".join(parts))
+
+
+def remember_detection(camera_name, detection, now):
+    key = (detection["model_name"], detection["class_name"])
+    cached = dict(detection)
+    cached["last_seen"] = now
+    recent_detections[camera_name][key] = cached
+
+
+def get_held_detections(camera_name, current_detections, now):
+    active_keys = {
+        (detection["model_name"], detection["class_name"])
+        for detection in current_detections
+    }
+    held = []
+
+    for key in list(recent_detections[camera_name]):
+        detection = recent_detections[camera_name][key]
+        if now - detection["last_seen"] > DETECTION_HOLD_SEC:
+            del recent_detections[camera_name][key]
+            continue
+
+        if key not in active_keys:
+            held.append(detection)
+
+    return held
+
+
+def draw_detection(frame, detection, held=False):
+    box = clamp_box(frame, detection)
+    if box is None:
+        return
+
+    x1, y1, x2, y2 = box
+    color = (0, 180, 255) if held else (0, 255, 0)
+    label = (
+        f"{detection['class_name']} {detection['confidence']:.2f}"
+        if detection["model_name"] == detection["class_name"]
+        else f"{detection['model_name']} {detection['confidence']:.2f}"
+    )
+    if held:
+        label += " hold"
+
+    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+    label_y = max(16, y1 - 6)
+    cv2.putText(frame, label, (x1, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
 
 def ensure_capture_dirs():
@@ -389,7 +442,9 @@ def detection_loop():
     width = camera_config["width"]
     height = camera_config["height"]
     fps = camera_config["fps"]
-    confidence = camera_config["confidence"]
+    capture_confidence = float(camera_config["confidence"])
+    inference_confidence = min(capture_confidence, INFERENCE_CONFIDENCE_FLOOR)
+    display_confidence = min(capture_confidence, DISPLAY_CONFIDENCE_FLOOR)
 
     print(f"Top Camera: {camera_index_1}")
     print(f"Bottom Camera: {camera_index_2}")
@@ -429,8 +484,6 @@ def detection_loop():
             with frame_lock:
                 latest_raw_frames["camera1"] = frame1.copy()
                 latest_raw_frames["camera2"] = frame2.copy()
-                latest_frames["camera1"] = frame1.copy()
-                latest_frames["camera2"] = frame2.copy()
                 latest_frame_times["camera1"] = now
                 latest_frame_times["camera2"] = now
 
@@ -439,13 +492,15 @@ def detection_loop():
             frame_detections = []
 
             for camera_number, frame in enumerate(frames, start=1):
+                camera_name = f"camera{camera_number}"
                 annotated = frame.copy()
+                camera_detections = []
 
                 for name, model in models.items():
                     results = model(
                         frame,
                         imgsz=416,
-                        conf=confidence,
+                        conf=inference_confidence,
                         verbose=False,
                         device=0,
                     )
@@ -455,9 +510,9 @@ def detection_loop():
                         cls_id = int(box.cls[0])
                         class_name = model.names[cls_id]
 
-                        if conf_score >= confidence:
+                        if conf_score >= display_confidence:
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            frame_detections.append({
+                            detection = {
                                 "camera_number": camera_number,
                                 "model_name": name,
                                 "class_name": class_name,
@@ -466,10 +521,19 @@ def detection_loop():
                                 "y1": y1,
                                 "x2": x2,
                                 "y2": y2,
-                            })
-                            capture_detected_target(frame, frame_detections[-1])
+                            }
+                            camera_detections.append(detection)
+                            frame_detections.append(detection)
+                            remember_detection(camera_name, detection, time.time())
 
-                    annotated = results[0].plot(img=annotated)
+                            if conf_score >= capture_confidence:
+                                capture_detected_target(frame, detection)
+
+                for detection in camera_detections:
+                    draw_detection(annotated, detection)
+                held_detections = get_held_detections(camera_name, camera_detections, time.time())
+                for detection in held_detections:
+                    draw_detection(annotated, detection, held=True)
 
                 annotated_frames.append(annotated)
 

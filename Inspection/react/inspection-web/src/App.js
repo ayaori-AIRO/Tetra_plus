@@ -132,6 +132,7 @@ function App() {
   const [liveMapRetryKey, setLiveMapRetryKey] = useState(Date.now());
   const photoModalRef = useRef(null);
   const streamRetryTimerRef = useRef(null);
+  const liveHealthMissesRef = useRef({ camera1: 0, camera2: 0 });
   const neopixelTimersRef = useRef({});
   const missionLogPanelRef = useRef(null);
   const bringupLogPanelRefs = useRef({});
@@ -675,22 +676,48 @@ function App() {
         }
 
         const health = await response.json();
+        ["camera1", "camera2"].forEach((cameraName) => {
+          if (health[cameraName]) {
+            liveHealthMissesRef.current[cameraName] = 0;
+          } else {
+            liveHealthMissesRef.current[cameraName] += 1;
+          }
+        });
+
         setLiveConnected((prev) => ({
           ...prev,
-          camera1: Boolean(health.camera1),
-          camera2: Boolean(health.camera2),
+          camera1: health.camera1
+            ? true
+            : liveHealthMissesRef.current.camera1 < 3
+              ? prev.camera1
+              : false,
+          camera2: health.camera2
+            ? true
+            : liveHealthMissesRef.current.camera2 < 3
+              ? prev.camera2
+              : false,
         }));
 
-        if (!health.camera1 || !health.camera2) {
+        if (
+          liveHealthMissesRef.current.camera1 >= 3 ||
+          liveHealthMissesRef.current.camera2 >= 3
+        ) {
           refreshLiveStreams();
         }
       } catch (error) {
+        liveHealthMissesRef.current.camera1 += 1;
+        liveHealthMissesRef.current.camera2 += 1;
         setLiveConnected((prev) => ({
           ...prev,
-          camera1: false,
-          camera2: false,
+          camera1: liveHealthMissesRef.current.camera1 < 3 ? prev.camera1 : false,
+          camera2: liveHealthMissesRef.current.camera2 < 3 ? prev.camera2 : false,
         }));
-        refreshLiveStreams();
+        if (
+          liveHealthMissesRef.current.camera1 >= 3 ||
+          liveHealthMissesRef.current.camera2 >= 3
+        ) {
+          refreshLiveStreams();
+        }
       }
     };
 
