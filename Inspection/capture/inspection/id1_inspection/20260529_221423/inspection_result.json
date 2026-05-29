@@ -1,0 +1,19 @@
+{
+  "extinguisher_id": "id1",
+  "pressure": "인식 안됨",
+  "pressure_angle": null,
+  "pressure_decision_source": "NO_IMAGE",
+  "appearance": "인식 안됨",
+  "expiry": "인식 안됨",
+  "expiry_date": "",
+  "result": "fail",
+  "time": "2026-05-29T22:14:23+09:00",
+  "run_id": "20260529_221423",
+  "pressure_image": "",
+  "appearance_image": "",
+  "appearance_images": [],
+  "appearance_sides": [],
+  "expiry_image": "",
+  "full_image": "/inspection-results/id1/full/fallback_camera1_top_camera2_bottom_20260529_221417.jpg",
+  "capture_complete": false
+}
