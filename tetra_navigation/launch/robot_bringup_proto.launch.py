@@ -95,6 +95,11 @@ def generate_launch_description():
             description='Maximum Nav2 behavior rotational acceleration in rad/s^2 for proto waypoint turns.',
         ),
         DeclareLaunchArgument(
+            'nav_in_place_max_angular_z',
+            default_value='0.18',
+            description='Maximum angular.z only when Nav2 is rotating in place.',
+        ),
+        DeclareLaunchArgument(
             'inspection_pipeline_script',
             default_value='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',
             description='Path to the inspection pipeline script used by proto inspection.',
@@ -138,6 +143,10 @@ def generate_launch_description():
                 'nav2_max_rotational_vel': LaunchConfiguration('nav2_max_rotational_vel', default='0.3'),
                 'nav2_min_rotational_vel': LaunchConfiguration('nav2_min_rotational_vel', default='0.08'),
                 'nav2_rotational_acc_lim': LaunchConfiguration('nav2_rotational_acc_lim', default='0.8'),
+                'nav_in_place_max_angular_z': LaunchConfiguration(
+                    'nav_in_place_max_angular_z',
+                    default='0.18',
+                ),
                 'inspection_pipeline_script': LaunchConfiguration(
                     'inspection_pipeline_script',
                     default='/home/ayaori/ros2_ws/src/tetra/Inspection/project/extinguisher_inspection/run_inspection_pipeline.py',

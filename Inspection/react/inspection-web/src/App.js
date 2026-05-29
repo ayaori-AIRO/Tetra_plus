@@ -26,6 +26,17 @@ const defaultBringupLogGroups = [
 ];
 const regularInspectionLastRunKey = "regularInspectionLastRunKey";
 const localInspectionResultsPath = "/local-inspection-results.json";
+const loginSessionKey = "tetraInspectionAuthenticated";
+const loginUser = process.env.REACT_APP_TETRA_UI_USER || "1";
+const loginPassword = process.env.REACT_APP_TETRA_UI_PASSWORD || "";
+
+const getStoredLoginSession = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.sessionStorage.getItem(loginSessionKey) === "true";
+};
 
 const getInspectionRecordKey = (item) => {
   const extinguisherId = item.extinguisher_id || "unknown";
@@ -60,6 +71,10 @@ function App() {
   const robotPoseBaseUrl = `http://${streamHost}:8003`;
   const [firebaseData, setFirebaseData] = useState([]);
   const [localData, setLocalData] = useState([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => getStoredLoginSession());
+  const [loginId, setLoginId] = useState("");
+  const [loginPasscode, setLoginPasscode] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [activeTab, setActiveTab] = useState("home");
   const [activeMapView, setActiveMapView] = useState("b1f");
   const today = new Date();
@@ -420,6 +435,29 @@ function App() {
     setEmergencyMotorStop(!emergencyStopActive);
   };
 
+  const handleLoginSubmit = (event) => {
+    event.preventDefault();
+
+    if (loginId.trim() === loginUser && loginPasscode === loginPassword) {
+      window.sessionStorage.setItem(loginSessionKey, "true");
+      setIsAuthenticated(true);
+      setLoginError("");
+      setLoginPasscode("");
+      return;
+    }
+
+    setLoginError("계정 정보를 확인해주세요.");
+    setLoginPasscode("");
+  };
+
+  const handleLogout = () => {
+    window.sessionStorage.removeItem(loginSessionKey);
+    setIsAuthenticated(false);
+    setLoginId("");
+    setLoginPasscode("");
+    setLoginError("");
+  };
+
   const startInspectionMission = useCallback(async () => {
     if (inspectionRunning) {
       return;
@@ -442,6 +480,10 @@ function App() {
   );
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     if (!regularInspectionSchedule) {
       return undefined;
     }
@@ -469,9 +511,13 @@ function App() {
     checkRegularInspectionSchedule();
     const intervalId = setInterval(checkRegularInspectionSchedule, 1000);
     return () => clearInterval(intervalId);
-  }, [regularInspectionSchedule, inspectionRunning, startInspectionMission]);
+  }, [isAuthenticated, regularInspectionSchedule, inspectionRunning, startInspectionMission]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     let isMounted = true;
 
     const loadNeopixelState = async () => {
@@ -521,9 +567,13 @@ function App() {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [hardwareControlBaseUrl]);
+  }, [isAuthenticated, hardwareControlBaseUrl]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     const q = query(
       collection(db, "inspection"),
       orderBy("time", "desc")
@@ -559,9 +609,13 @@ function App() {
     );
 
     return unsubscribe;
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     let isMounted = true;
 
     const loadLocalInspectionResults = async () => {
@@ -589,7 +643,7 @@ function App() {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const neopixelTimers = neopixelTimersRef.current;
@@ -606,6 +660,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     const checkLiveHealth = async () => {
       try {
         const response = await fetch(`${inspectionStreamBaseUrl}/health`, {
@@ -639,9 +697,13 @@ function App() {
     checkLiveHealth();
     const intervalId = setInterval(checkLiveHealth, 1000);
     return () => clearInterval(intervalId);
-  }, [inspectionStreamBaseUrl]);
+  }, [isAuthenticated, inspectionStreamBaseUrl]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     const checkAprilTagHealth = async () => {
       try {
         const response = await fetch(`${apriltagStreamBaseUrl}/health`, {
@@ -680,9 +742,13 @@ function App() {
     checkAprilTagHealth();
     const intervalId = setInterval(checkAprilTagHealth, 1000);
     return () => clearInterval(intervalId);
-  }, [apriltagStreamBaseUrl]);
+  }, [isAuthenticated, apriltagStreamBaseUrl]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     let isMounted = true;
 
     const loadRobotPose = async () => {
@@ -712,9 +778,13 @@ function App() {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [robotPoseBaseUrl]);
+  }, [isAuthenticated, robotPoseBaseUrl]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     let isMounted = true;
 
     const loadBringupLogs = async () => {
@@ -744,7 +814,7 @@ function App() {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [robotPoseBaseUrl]);
+  }, [isAuthenticated, robotPoseBaseUrl]);
 
   useEffect(() => {
     if (missionLogPanelRef.current) {
@@ -761,6 +831,10 @@ function App() {
   }, [bringupLogGroups, activeTab]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
     if (activeMapView !== "live" || liveMapLoaded) {
       return undefined;
     }
@@ -770,7 +844,55 @@ function App() {
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [activeMapView, liveMapLoaded]);
+  }, [isAuthenticated, activeMapView, liveMapLoaded]);
+
+  if (!isAuthenticated) {
+    return (
+      <main className="login-page">
+        <section className="login-panel" aria-labelledby="login-title">
+          <div className="login-brand">
+            <div className="login-mark">T</div>
+            <div>
+              <p>TETRA</p>
+              <h1 id="login-title">소화기 점검 시스템</h1>
+            </div>
+          </div>
+
+          <form className="login-form" onSubmit={handleLoginSubmit}>
+            <label>
+              <span>아이디</span>
+              <input
+                type="text"
+                value={loginId}
+                autoComplete="username"
+                onChange={(event) => {
+                  setLoginId(event.target.value);
+                  setLoginError("");
+                }}
+              />
+            </label>
+
+            <label>
+              <span>비밀번호</span>
+              <input
+                type="password"
+                value={loginPasscode}
+                autoComplete="current-password"
+                onChange={(event) => {
+                  setLoginPasscode(event.target.value);
+                  setLoginError("");
+                }}
+              />
+            </label>
+
+            {loginError && <div className="login-error" role="alert">{loginError}</div>}
+
+            <button className="login-submit" type="submit">로그인</button>
+          </form>
+        </section>
+      </main>
+    );
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -1290,7 +1412,12 @@ function App() {
 
   return (
     <div className="container">
-      <h1>TETRA 소화기 점검 시스템</h1>
+      <div className="app-title-row">
+        <h1>TETRA 소화기 점검 시스템</h1>
+        <button className="logout-button" type="button" onClick={handleLogout}>
+          로그아웃
+        </button>
+      </div>
 
       <div className="content-row">
         <div className="map-section">

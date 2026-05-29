@@ -38,6 +38,7 @@ def generate_launch_description():
     nav2_max_rotational_vel = LaunchConfiguration('nav2_max_rotational_vel')
     nav2_min_rotational_vel = LaunchConfiguration('nav2_min_rotational_vel')
     nav2_rotational_acc_lim = LaunchConfiguration('nav2_rotational_acc_lim')
+    nav_in_place_max_angular_z = LaunchConfiguration('nav_in_place_max_angular_z')
     mission_autostart = LaunchConfiguration('mission_autostart')
     start_docking_after_nav_active = LaunchConfiguration('start_docking_after_nav_active')
     dock_after_waypoint = LaunchConfiguration('dock_after_waypoint')
@@ -229,6 +230,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'default_source': 'nav',
+            'max_nav_in_place_angular_z': nav_in_place_max_angular_z,
         }],
         condition=IfCondition(use_cmd_vel_mux),
     )
@@ -458,6 +460,11 @@ def generate_launch_description():
             'nav2_rotational_acc_lim',
             default_value='2.0',
             description='Maximum Nav2 behavior rotational acceleration in rad/s^2.'
+        ),
+        DeclareLaunchArgument(
+            'nav_in_place_max_angular_z',
+            default_value='0.18',
+            description='Maximum angular.z only when Nav2 is rotating in place.'
         ),
         DeclareLaunchArgument(
             'mission_autostart',

@@ -15,7 +15,15 @@ class CmdVelMux(Node):
         super().__init__('cmd_vel_mux')
 
         self.declare_parameter('default_source', 'nav')
+        self.declare_parameter('max_nav_in_place_angular_z', 0.18)
+        self.declare_parameter('nav_in_place_linear_threshold', 0.02)
         self.source = self.get_parameter('default_source').value
+        self.max_nav_in_place_angular_z = float(
+            self.get_parameter('max_nav_in_place_angular_z').value
+        )
+        self.nav_in_place_linear_threshold = float(
+            self.get_parameter('nav_in_place_linear_threshold').value
+        )
         self.emergency_stop_active = False
         self.last_nav_cmd = Twist()
         self.last_servo_cmd = Twist()
@@ -29,7 +37,10 @@ class CmdVelMux(Node):
         self.create_subscription(Bool, '/cmd_vel_mux/emergency_stop', self.emergency_stop_callback, 10)
         self.create_timer(0.1, self.emergency_stop_timer)
 
-        self.get_logger().info(f'cmd_vel_mux ready. selected source={self.source}')
+        self.get_logger().info(
+            f'cmd_vel_mux ready. selected source={self.source}, '
+            f'nav in-place angular limit={self.max_nav_in_place_angular_z:.3f} rad/s'
+        )
 
     def emergency_stop_callback(self, msg):
         active = bool(msg.data)
@@ -63,7 +74,7 @@ class CmdVelMux(Node):
     def nav_callback(self, msg):
         self.last_nav_cmd = msg
         if not self.emergency_stop_active and self.source == 'nav':
-            self.cmd_pub.publish(msg)
+            self.cmd_pub.publish(self.limit_nav_in_place_rotation(msg))
 
     def servo_callback(self, msg):
         self.last_servo_cmd = msg
@@ -74,6 +85,24 @@ class CmdVelMux(Node):
         self.last_direct_cmd = msg
         if not self.emergency_stop_active and self.source == 'direct':
             self.cmd_pub.publish(msg)
+
+    def limit_nav_in_place_rotation(self, msg):
+        linear_speed = max(abs(msg.linear.x), abs(msg.linear.y))
+        if linear_speed > self.nav_in_place_linear_threshold:
+            return msg
+
+        max_angular = abs(self.max_nav_in_place_angular_z)
+        if max_angular <= 0.0 or abs(msg.angular.z) <= max_angular:
+            return msg
+
+        limited = Twist()
+        limited.linear.x = msg.linear.x
+        limited.linear.y = msg.linear.y
+        limited.linear.z = msg.linear.z
+        limited.angular.x = msg.angular.x
+        limited.angular.y = msg.angular.y
+        limited.angular.z = max(-max_angular, min(max_angular, msg.angular.z))
+        return limited
 
     def publish_stop(self, repeats=3, interval=0.05):
         stop_cmd = Twist()
